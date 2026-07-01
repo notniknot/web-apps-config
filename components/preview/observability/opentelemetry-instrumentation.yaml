@@ -1,0 +1,17 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: web
+  labels:
+    app.kubernetes.io/name: web
+    preview.sonia.so/plumbing: tracing
+spec:
+  exporter:
+    endpoint: http://otel-collector.observability.svc:4317
+  propagators:
+    - tracecontext
+    - baggage
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+
