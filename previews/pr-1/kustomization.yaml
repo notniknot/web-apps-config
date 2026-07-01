@@ -1,13 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: web
-
 resources:
   - ../../apps/web/base
-
 components:
   - ../../components/preview/route
-
 labels:
   - includeSelectors: false
     includeTemplates: true
@@ -15,11 +12,10 @@ labels:
       app.kubernetes.io/version: preview-pr-1
       preview.sonia.so/enabled: "true"
       preview.sonia.so/pr: "1"
-
 images:
   - name: ghcr.io/notniknot/web-apps
     newTag: preview-pr-1
-
+    digest: sha256:07dc148eef9f847e4fa8b7acf875c127cd343fb02eca1ebdf87f96d9681ac172
 patches:
   - path: patches/deployment-env.yaml
   - path: patches/httproute-hostname.yaml
