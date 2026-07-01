@@ -17,6 +17,12 @@ spec:
         - name: verify
           image: docker.io/library/redis:7.4-alpine
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
           env:
             - name: REDIS_PASSWORD
               valueFrom:
