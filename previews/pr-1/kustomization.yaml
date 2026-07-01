@@ -7,7 +7,6 @@ resources:
 
 components:
   - ../../components/preview/route
-  - ../../components/preview/secrets
 
 labels:
   - includeSelectors: false
