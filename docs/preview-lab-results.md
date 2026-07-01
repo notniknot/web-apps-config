@@ -21,6 +21,8 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Repository bootstrap: working. `web-apps` and `web-apps-config` are initialized and pushed.
 - Private GHCR image and pull secret: partial. GHCR package was created public by default; package API access works after adding package scopes, but changing visibility still needs a follow-up. A real GHCR pull secret is installed, replicated/imported, and referenced by the synced preview Pod.
 - vCluster preview app through Argo CD: working. Argo CD deploys `web-apps-preview-pr-1` into the vCluster API, and vCluster syncs the real Pod and Service into `web-preview-pr-1`.
+- Tenant app-of-apps structure: working. The root repo creates `argocd/web-apps-app-of-apps`, which scans `web-apps-config/apps` and creates the tenant-owned `web/web` Application.
+- Stable parent-cluster app: working. `web/web` deploys `apps/web/playground` into the parent-cluster `web` namespace and the Deployment is Ready.
 - Argo CD Image Updater digest write-back: working. It matched the preview app, resolved `preview-pr-1`, and pushed `digest: sha256:07dc...` into `previews/pr-1/kustomization.yaml`.
 - Shared replicated secret: working at host level. `shared-preview-secret` was copied from `web` to `web-preview-pr-1` by mittwald replicator.
 - Per-preview generated ExternalSecret: working with host-side generation. vCluster's built-in `integrations.externalSecrets` setting is a vCluster Pro feature, so OSS vCluster cannot use that integration directly. For OSS, the platform/controller should generate the `ExternalSecret` in the host preview namespace and let vCluster import the resulting Secret.
@@ -55,7 +57,12 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 
 - GitHub PR #1 with label `preview/playground` built `ghcr.io/notniknot/web-apps:preview-pr-1`.
 - Image Updater wrote commit `7035026` to `web-apps-config`.
+- Tenant app-of-apps commit in `argocd`: `a5fb10f`.
+- Real-style tenant config commit in `web-apps-config`: `1cdf33e`.
 - Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:07dc148eef9f847e4fa8b7acf875c127cd343fb02eca1ebdf87f96d9681ac172`.
+- `argocd/web-apps-app-of-apps` is `Synced` and `Healthy`.
+- `web/web` is `Synced` and `Healthy`.
+- Parent-cluster `web` Deployment is `1/1` Ready.
 - Synced host Pod uses the pinned digest and is Ready.
 - Host secrets present: `ghcr-pull-secret`, `shared-preview-secret`, `generated-preview-secret`.
 - vCluster-imported translated secrets present: `*-x-web-x-web-pr-1`.
