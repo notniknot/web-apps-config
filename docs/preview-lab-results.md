@@ -9,8 +9,9 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Config repository: `notniknot/web-apps-config`.
 - PR image tag: `ghcr.io/notniknot/web-apps:preview-pr-<number>`.
 - Preview metadata file: `preview.yaml`.
-- Generated overlay pattern: `previews/pr-<number>`.
-- Kustomize structure: stable app base plus small preview components.
+- Stable app pattern: `apps/<app>/base`, `apps/<app>/<env>`, and `apps/<app>/<app>-<env>.argocd.yaml`, matching the real tenant config repositories.
+- Generated preview overlay pattern for this lab run: `previews/pr-<number>`.
+- Future generated preview overlay pattern should either keep `previews/pr-<number>` or move under `apps/<app>/previews/pr-<number>`; the important contract is that the controller owns generated preview paths and developers own the stable app base/env overlays.
 - Argo CD preview app: `argocd/web-apps-preview-pr-1`.
 - Preview vCluster: `web-pr-1` in host namespace `web-preview-pr-1`.
 - Preview URL tested internally through KGateway: `https://web-pr-1.sonia-certs.uk/`.
@@ -30,9 +31,25 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Redis operator dependency: not installed yet. Recommended first test is host-side generated Redis CR plus imported connection Secret, not arbitrary tenant CR sync.
 - RabbitMQ operator dependency: not installed yet. Same pattern as Redis: host-side generated `RabbitmqCluster`, imported Secret.
 - CNPG dependency: not installed yet. Treat as a separate database mode with strict cleanup and credentials policy.
-- PersistentVolumeClaim and S3 Mountpoint CSI: not tested yet. Basic PVC sync is enabled by default; S3 CSI needs the host storage class/driver present and should be tested with a small read-only bucket first.
+- PersistentVolumeClaim and S3 Mountpoint CSI: not tested yet. Basic PVC sync is enabled by default; the lab cluster currently only exposes the Nebius compute CSI StorageClass, so S3 CSI needs the host driver and StorageClass installed first.
 - OpenTelemetry instrumentation: not installed yet. Prefer host-side operator policy or explicit app instrumentation before syncing arbitrary `Instrumentation` CRs.
 - Cluster-scoped/RBAC resources: not tested in this run. Preview AppProject should continue to block broad cluster-scoped resources for tenant apps.
+
+## App-Of-Apps Structure
+
+- Infra/root repo owns tenant `AppProject` resources and the tenant app-of-apps `Application`.
+- Tenant config repo owns child application manifests under `apps/<app>/<app>-<env>.argocd.yaml`.
+- For this lab, `web-apps-app-of-apps` scans `notniknot/web-apps-config/apps` for `*-playground.argocd.yaml`.
+- The stable lab app is `web/web`, deployed from `apps/web/playground` to the parent-cluster `web` namespace.
+- The preview app stays separate as generated/controller-owned infrastructure: `argocd/web-apps-preview-pr-1` points to the vCluster API and deploys `previews/pr-1`.
+
+## Dependency Patterns
+
+- Redis: install and operate the Redis operator in the host cluster. The lab cluster does not currently have Redis operator CRDs. For previews, the controller should create a tightly-scoped host-side Redis CR or choose a shared Redis mode, then import only the connection Secret into the vCluster. Do not let arbitrary tenant preview apps create Redis operator CRs inside vCluster until the CRDs, RBAC, cleanup, and quota behavior are tested.
+- RabbitMQ: same boundary as Redis. The lab cluster does not currently have RabbitMQ operator CRDs. Keep the RabbitMQ operator host-side, create per-preview `RabbitmqCluster` resources only through platform automation, and sync the generated connection Secret into the vCluster for the app.
+- S3 Mountpoint CSI: the CSI driver and StorageClass must exist in the host cluster. The vCluster app can use a PVC only if the storage class is imported/visible and PVC sync provisions a real host PVC/PV. Bucket credentials, bucket naming, access mode, and cleanup should be platform-owned, usually with an imported Secret or generated host-side PVC contract.
+- Shared dependency Secret flow: ESO or another host mechanism creates the source Secret in the tenant namespace, mittwald replicator copies it into `web-preview-pr-<n>`, and `sync.fromHost.secrets` imports it into the vCluster.
+- Per-preview generated Secret flow: the preview controller creates an `ExternalSecret` or plain generated Secret in the host preview namespace, waits for the resulting Secret, and `sync.fromHost.secrets` imports it into the vCluster.
 
 ## Verified Commands/Signals
 
