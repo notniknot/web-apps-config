@@ -17,10 +17,10 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Repository bootstrap: working. `web-apps` and `web-apps-config` are initialized and pushed.
 - Private GHCR image and pull secret: partial. GHCR package was created public by default; package API access works after adding package scopes, but changing visibility still needs a follow-up. A real GHCR pull secret is installed for the lab.
 - vCluster preview app through Argo CD: in progress.
-- Argo CD Image Updater digest write-back: in progress.
+- Argo CD Image Updater digest write-back: in progress. The v1 `ImageUpdater` CRD requires `commonUpdateSettings.platforms` as a list, not a scalar string.
 - Shared replicated secret: working at host level. `shared-preview-secret` was copied from `web` to `web-preview-pr-1` by mittwald replicator.
 - Per-preview generated ExternalSecret: adjusted. vCluster's built-in `integrations.externalSecrets` setting is a vCluster Pro feature, so OSS vCluster cannot use that integration directly. For OSS, the platform/controller should generate the `ExternalSecret` in the host preview namespace and let vCluster import the resulting Secret.
-- Gateway API HTTPRoute through KGateway: pending.
+- Gateway API HTTPRoute through KGateway: in progress. The route applies inside the vCluster, but host-side HTTPRoute sync has not appeared yet.
 - Gateway API policy resources: pending.
 - Metrics scraping from vCluster workloads: pending.
 - Grafana dashboard resources: pending.
