@@ -30,10 +30,10 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Gateway API policy resources: pending.
 - Metrics scraping from vCluster workloads: not installed yet. The synced Service and Pod have stable labels in the host namespace, so the likely pattern is controller-generated host-side `VMServiceScrape` or `VMPodScrape`.
 - Grafana dashboard resources: not installed yet. Keep `GrafanaDashboard` host-side/platform-owned unless tenant dashboard CRDs are deliberately allowlisted.
-- Redis operator dependency: platform capability installed. The lab now has the OT Container Kit Redis operator and the Redis CRDs.
-- RabbitMQ operator dependency: platform capability installed. The lab now has the RabbitMQ Cluster Operator and the `RabbitmqCluster` CRD.
+- Redis operator dependency: working with host-side operator ownership. The lab creates a host-side `Redis` CR in `web-preview-pr-1`, imports the generated/password Secret into the vCluster, replicates the host Service into the vCluster, and a vCluster Job successfully ran `redis-cli ping`.
+- RabbitMQ operator dependency: working with host-side operator ownership. The lab creates a host-side `RabbitmqCluster`, imports the generated default-user Secret into the vCluster, replicates the host Service into the vCluster, and a vCluster Job successfully reached port `5672`.
 - CNPG dependency: not installed yet. Treat as a separate database mode with strict cleanup and credentials policy.
-- PersistentVolumeClaim and S3 Mountpoint CSI: driver installed. The lab now has the AWS Mountpoint S3 CSI driver, its `CSIDriver`, and `MountpointS3PodAttachment` CRD. The driver does not create a dynamic StorageClass; the real cluster pattern uses static PV/PVC resources with `driver: s3.csi.aws.com`.
+- PersistentVolumeClaim and S3 Mountpoint CSI: working with host-side static PV ownership. The lab uses AWS Mountpoint S3 CSI with a static host `PersistentVolume`, a vCluster PVC, and the vCluster verifier Job successfully listed a public S3 bucket mounted at `/mnt/s3`.
 - OpenTelemetry instrumentation: not installed yet. Prefer host-side operator policy or explicit app instrumentation before syncing arbitrary `Instrumentation` CRs.
 - Cluster-scoped/RBAC resources: not tested in this run. Preview AppProject should continue to block broad cluster-scoped resources for tenant apps.
 
@@ -52,6 +52,8 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - S3 Mountpoint CSI: operate the CSI driver in the host cluster. The vCluster app can use a PVC only if the host PV/PVC contract is generated and synced correctly. Bucket credentials, bucket naming, access mode, and cleanup should be platform-owned, usually with an imported Secret plus generated static PV/PVC resources.
 - Shared dependency Secret flow: ESO or another host mechanism creates the source Secret in the tenant namespace, mittwald replicator copies it into `web-preview-pr-<n>`, and `sync.fromHost.secrets` imports it into the vCluster.
 - Per-preview generated Secret flow: the preview controller creates an `ExternalSecret` or plain generated Secret in the host preview namespace, waits for the resulting Secret, and `sync.fromHost.secrets` imports it into the vCluster.
+- Per-preview Redis/RabbitMQ flow: the preview controller creates host-side operator CRs in the host preview namespace, waits for Ready conditions and generated connection Secrets, configures vCluster `sync.fromHost.secrets`, and configures vCluster `networking.replicateServices.fromHost` so the app connects to normal in-vCluster Service names.
+- Per-preview S3 CSI flow: the preview controller creates or selects host-side S3 credentials, creates the static host `PersistentVolume` with the S3 CSI driver, and lets the tenant preview overlay create the matching PVC inside the vCluster. Keep bucket naming, credentials, lifecycle, and cleanup platform-owned.
 
 ## Verified Commands/Signals
 
@@ -60,14 +62,18 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Tenant app-of-apps commit in `argocd`: `a5fb10f`.
 - Real-style tenant config commit in `web-apps-config`: `1cdf33e`.
 - Lab dependency operator install commit in `argocd`: `06ff35d`.
+- Lab dependency platform resource commit in `argocd`: `976b9f4`.
+- vCluster dependency verifier commit in `web-apps-config`: `d424bdd`.
 - Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:07dc148eef9f847e4fa8b7acf875c127cd343fb02eca1ebdf87f96d9681ac172`.
 - `argocd/web-apps-app-of-apps` is `Synced` and `Healthy`.
+- `argocd/preview-platform`, `argocd/web-preview-pr-1-vcluster`, and `argocd/web-apps-preview-pr-1` are `Synced` and `Healthy` after the dependency test.
 - `web/web` is `Synced` and `Healthy`.
 - Parent-cluster `web` Deployment is `1/1` Ready.
 - `argocd/redis-operator`, `argocd/rabbitmq-operator`, and `argocd/mountpoint-s3` are `Synced` and `Healthy`.
 - Redis CRDs verified: `redis.redis.redis.opstreelabs.in`, `redisclusters.redis.redis.opstreelabs.in`, `redisreplications.redis.redis.opstreelabs.in`, `redissentinels.redis.redis.opstreelabs.in`.
 - RabbitMQ CRD verified: `rabbitmqclusters.rabbitmq.com`.
 - Mountpoint S3 verified: `CSIDriver s3.csi.aws.com` and `mountpoints3podattachments.s3.csi.aws.com`.
+- Preview dependency test verified from inside the vCluster: Redis ping, RabbitMQ TCP connect, imported Redis/RabbitMQ Secrets, and S3 PVC mount/listing all succeeded.
 - Synced host Pod uses the pinned digest and is Ready.
 - Host secrets present: `ghcr-pull-secret`, `shared-preview-secret`, `generated-preview-secret`.
 - vCluster-imported translated secrets present: `*-x-web-x-web-pr-1`.
@@ -81,3 +87,12 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Use OSS vCluster with `sync.fromHost.secrets` for pull/application secrets and normal workload sync for Pods/Services.
 - Avoid vCluster Pro-only integrations in the OSS setup.
 - Avoid Argo CD server-side diff/apply on preview apps that include CRDs inside vCluster unless tested per CRD.
+
+## vCluster Lab Findings
+
+- OSS vCluster is enough for this pattern. We did not need vCluster Pro integrations for Redis, RabbitMQ, or S3; the boundary was host-side platform resources plus explicit sync/replication into the virtual cluster.
+- Host-to-vCluster Secret import worked for replicated pull/shared Secrets and generated dependency Secrets.
+- Host-to-vCluster Service replication worked for Redis and RabbitMQ, allowing the preview app to use normal in-vCluster Service names.
+- Static S3 CSI PV/PVC worked through vCluster when the platform owned the host PV and the app owned only the vCluster PVC.
+- Argo CD can manage the preview app against the vCluster API, but this lab exposed a controller panic in Argo CD while caching vCluster Pods: `panic: assignment to entry in nil map` in `kubectl/pkg/util/resource.maxResourceList`. The practical mitigation for now is to require complete CPU and memory requests/limits on all preview Pods and hooks, and to avoid leaving stale Argo hook finalizers during crash recovery.
+- Keep operator CRs host-side for now. Letting tenant apps create Redis/RabbitMQ/S3 platform resources inside the vCluster would require extra RBAC, quota, cleanup, and CRD behavior testing.
