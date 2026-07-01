@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: preview-s3-public
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadOnlyMany
+  volumeName: preview-pr-1-s3-public
+  resources:
+    requests:
+      storage: 1Gi

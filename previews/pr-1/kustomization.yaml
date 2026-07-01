@@ -3,6 +3,8 @@ kind: Kustomization
 namespace: web
 resources:
   - ../../apps/web/base
+  - s3-pvc.yaml
+  - dependency-verifier-job.yaml
 labels:
   - includeSelectors: false
     includeTemplates: true

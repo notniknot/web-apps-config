@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: preview-dependency-verifier
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: preview-dependency-verifier
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: verify
+          image: docker.io/library/redis:7.4-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: preview-redis
+                  key: REDIS_PASSWORD
+            - name: RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: preview-rabbitmq-default-user
+                  key: username
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: preview-rabbitmq-default-user
+                  key: password
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              for i in $(seq 1 120); do
+                redis-cli -h preview-redis -a "$REDIS_PASSWORD" ping 2>/tmp/redis.err | grep -q PONG && break
+                sleep 2
+              done
+              redis-cli -h preview-redis -a "$REDIS_PASSWORD" ping | grep -q PONG
+
+              for i in $(seq 1 120); do
+                nc -z preview-rabbitmq 5672 && break
+                sleep 2
+              done
+              nc -z preview-rabbitmq 5672
+              test -n "$RABBITMQ_USERNAME"
+              test -n "$RABBITMQ_PASSWORD"
+
+              test -d /mnt/s3
+              ls /mnt/s3 >/tmp/s3-listing.txt
+              test -s /tmp/s3-listing.txt
+              echo "preview dependencies verified"
+          volumeMounts:
+            - name: s3-public
+              mountPath: /mnt/s3
+              readOnly: true
+      volumes:
+        - name: s3-public
+          persistentVolumeClaim:
+            claimName: preview-s3-public
+            readOnly: true
