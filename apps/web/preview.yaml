@@ -7,7 +7,7 @@ preview:
     path: apps/web/playground
     targetRevision: main
   components:
-    - ../previews/components/preview
+    - ../previews/components
   patches:
     - target:
         group: apps

@@ -5,7 +5,7 @@ Tenant GitOps configuration for `notniknot/web-apps`.
 Layout:
 
 - `apps/web/base`: normal reusable app manifests.
-- `components/preview/*`: opt-in preview features and experiments.
+- `apps/web/previews/components/*`: opt-in preview features and experiments.
 - `previews/pr-<number>`: generated preview overlay owned by preview automation.
 - `docs/preview-lab-results.md`: running notes from the vCluster lab.
 

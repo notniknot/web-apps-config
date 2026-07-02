@@ -9,7 +9,7 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Config repository: `notniknot/web-apps-config`.
 - PR image tag: `ghcr.io/notniknot/web-apps:preview-pr-<number>`.
 - App-local preview contract: `apps/web/preview.yaml`.
-- App-local preview component: `apps/web/components/preview`.
+- App-local preview component: `apps/web/previews/components`.
 - Stable app pattern: `apps/<app>/base`, `apps/<app>/<env>`, and `apps/<app>/<app>-<env>.argocd.yaml`, matching the real tenant config repositories.
 - Generated preview overlay pattern: `apps/<app>/previews/<environment>/pr-<number>`.
 - For this lab PR, the generated overlay lives at `apps/web/previews/playground/pr-1` on branch `preview/pr-1`; developers own the stable app base/env overlays and preview component, and the controller owns generated preview paths.
@@ -90,7 +90,7 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 ## Current Recommended Pattern
 
 - App overlay in `web-apps-config` should own only normal namespaced workload resources inside the vCluster.
-- App teams should keep their preview contract at `apps/<app>/preview.yaml` and reusable preview-only resources at `apps/<app>/components/preview`.
+- App teams should keep their preview contract at `apps/<app>/preview.yaml` and reusable preview-only resources at `apps/<app>/previews/components`.
 - The controller should generate only thin PR overlays under `apps/<app>/previews/<environment>/pr-<number>` and reference the app component with Kustomize `components`.
 - Preview controller/platform owns host namespace, vCluster, replicated/imported secrets, generated host `ExternalSecret`, generated host `HTTPRoute`, ImageUpdater CR, and Argo CD Application.
 - Use OSS vCluster with `sync.fromHost.secrets` for pull/application secrets and normal workload sync for Pods/Services.
