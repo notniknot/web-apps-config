@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: web-redis
+  labels:
+    app.kubernetes.io/name: web-redis
+    app.kubernetes.io/part-of: web-apps
+type: Opaque
+stringData:
+  REDIS_PASSWORD: web-redis-password
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: Redis
+metadata:
+  name: web-redis
+  labels:
+    app.kubernetes.io/name: web-redis
+    app.kubernetes.io/part-of: web-apps
+spec:
+  kubernetesConfig:
+    image: quay.io/opstree/redis:v7.4.6
+    imagePullPolicy: IfNotPresent
+    redisSecret:
+      name: web-redis
+      key: REDIS_PASSWORD
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+        ephemeral-storage: 50Mi
+      limits:
+        cpu: 100m
+        memory: 128Mi
+  redisExporter:
+    enabled: false
+    image: quay.io/opstree/redis-exporter:v1.78.0
+  podSecurityContext:
+    fsGroup: 1000
+    runAsUser: 1000

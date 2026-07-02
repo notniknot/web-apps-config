@@ -50,6 +50,14 @@ spec:
                   name: generated-preview-secret
                   key: message
                   optional: true
+            - name: REDIS_HOST
+              value: web-redis
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: web-redis
+                  key: REDIS_PASSWORD
+                  optional: true
           readinessProbe:
             httpGet:
               path: /healthz
@@ -65,4 +73,12 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
-
+          volumeMounts:
+            - name: s3-public
+              mountPath: /mnt/s3
+              readOnly: true
+      volumes:
+        - name: s3-public
+          persistentVolumeClaim:
+            claimName: web-s3-public
+            readOnly: true

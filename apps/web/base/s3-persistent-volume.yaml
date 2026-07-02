@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: web-s3-public
+  labels:
+    app.kubernetes.io/name: web-s3-public
+    app.kubernetes.io/part-of: web-apps
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadOnlyMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  claimRef:
+    namespace: web
+    name: web-s3-public
+  mountOptions:
+    - region us-east-1
+    - read-only
+    - allow-other
+    - no-sign-request
+    - prefix ABI-L1b-RadC/2024/001/00/
+  csi:
+    driver: s3.csi.aws.com
+    volumeHandle: web-s3-public-noaa-goes16
+    volumeAttributes:
+      bucketName: noaa-goes16

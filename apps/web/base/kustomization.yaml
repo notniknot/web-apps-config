@@ -3,9 +3,14 @@ kind: Kustomization
 
 resources:
   - deployment.yaml
+  - external-secret.yaml
+  - httproute.yaml
+  - image-updater.yaml
+  - redis.yaml
+  - s3-persistent-volume.yaml
+  - s3-persistent-volume-claim.yaml
   - service.yaml
 
 images:
   - name: ghcr.io/notniknot/web-apps
     newTag: main
-

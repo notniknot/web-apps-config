@@ -1,6 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: web
 
 resources:
   - ../base
@@ -18,3 +17,21 @@ labels:
 replicas:
   - name: web
     count: 1
+
+patches:
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: web.playground.sonia-certs.uk
+  - target:
+      group: argocd-image-updater.argoproj.io
+      kind: ImageUpdater
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/applicationRefs/0/images/0/imageName
+        value: ghcr.io/notniknot/web-apps:main

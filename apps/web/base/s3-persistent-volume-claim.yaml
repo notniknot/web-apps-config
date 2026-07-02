@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: web-s3-public
+  labels:
+    app.kubernetes.io/name: web-s3-public
+    app.kubernetes.io/part-of: web-apps
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadOnlyMany
+  volumeName: web-s3-public
+  resources:
+    requests:
+      storage: 1Gi

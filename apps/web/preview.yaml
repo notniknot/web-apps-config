@@ -4,37 +4,38 @@ preview:
   tenant: web
   configRepository: web-apps-config
   configBasePath: apps/web/base
-  componentPath: apps/web/components/preview
+  componentPath: apps/web/previews/components/preview
   source:
     mode: inline-kustomize
     path: apps/web/playground
     targetRevision: main
   components:
-    - ../components/preview
-  image:
-    alias: web
-    name: ghcr.io/notniknot/web-apps
-    tagTemplate: preview-pr-{{.PR}}
+    - ../previews/components/preview
   patches:
     - target:
+        group: apps
+        version: v1
         kind: Deployment
         name: web
-      patchTemplate: |
-        - op: replace
-          path: /spec/template/spec/containers/0/env/2/value
-          value: "{{.PR}}"
+      path: previews/patches/deployment-env.yaml
+    - target:
+        group: gateway.networking.k8s.io
+        version: v1
+        kind: HTTPRoute
+        name: web
+      path: previews/patches/httproute-hostname.yaml
+    - target:
+        group: argocd-image-updater.argoproj.io
+        version: v1alpha1
+        kind: ImageUpdater
+        name: web
+      path: previews/patches/image-updater-preview.yaml
     - target:
         kind: ConfigMap
         name: preview-inline-demo
-      patchTemplate: |
-        - op: replace
-          path: /data/pr
-          value: "{{.PR}}"
-        - op: replace
-          path: /data/hostname
-          value: "{{.PrimaryHostname}}"
+      path: previews/patches/preview-inline-demo.yaml
   routes:
-    - name: web-pr-{{.PR}}
+    - name: web
       hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
   secrets:
     import:
@@ -42,16 +43,3 @@ preview:
       - shared-preview-secret
     generated:
       - generated-preview-secret
-  redis:
-    enabled: true
-  rabbitmq:
-    enabled: true
-  s3:
-    enabled: true
-    bucket: noaa-goes16
-    region: us-east-1
-    prefix: ABI-L1b-RadC/2024/001/00/
-    readOnly: true
-    noSignRequest: true
-  verifier:
-    enabled: false

@@ -1,0 +1,17 @@
+- op: replace
+  path: /metadata/name
+  value: web-apps-preview-pr-{{.PR}}
+- op: replace
+  path: /spec/writeBackConfig/method
+  value: argocd
+- op: remove
+  path: /spec/writeBackConfig/gitConfig
+- op: replace
+  path: /spec/applicationRefs/0/namePattern
+  value: web-apps-preview-pr-{{.PR}}
+- op: replace
+  path: /spec/applicationRefs/0/images/0/commonUpdateSettings/updateStrategy
+  value: newest-build
+- op: add
+  path: /spec/applicationRefs/0/images/0/commonUpdateSettings/allowTags
+  value: regexp:^preview-pr-{{.PR}}-.*
