@@ -113,3 +113,12 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - The controller must preserve fields written by other automation. In this lab, preserving the Image Updater `digest` in the preview branch was required to avoid controller/Image Updater commit churn.
 - Generated preview files should be aggregated under a controller-owned path such as `kubernetes/apps/preview-platform/lab/generated/web-pr-1-platform.yaml`; shared platform resources stay outside the generated file.
 - Long-running polling works once writes are byte-stable. The deployed controller reconciles PR #1 every minute and did not create additional commits after the desired state matched.
+
+## Host-Namespace Preview Update
+
+- Removing the `preview/playground` label from PR #2 cleaned up the generated Argo CD Application, generated platform file, and `web-preview-pr-2` namespace. The cleanup was eventually consistent: Git was cleaned first, then Argo CD pruned the platform namespace.
+- Generated preview Applications now include `resources-finalizer.argocd.argoproj.io` so deleting the Application can cascade workload resources instead of relying only on namespace pruning.
+- The normal `web` app now uses `spec.sources` with a Kustomize workload source and a tiny Helm addon source. The generated preview app copies the same source list and injects preview Kustomize patches only into the source matching `preview.source.path`.
+- Because the lab root app uses server-side diff, generated preview Applications also include a compatibility `spec.source` copied from the first source. Without that, server-side dry-run rejected child Applications with `spec.source.repoURL: Required value`.
+- Argo CD Image Updater patches both `spec.source.kustomize.images` and `spec.sources[0].kustomize.images` on multi-source preview apps. The root app must ignore both paths for resources labeled `preview.sonia.so/enabled=true`.
+- Verified PR #3 after the change: `argocd/web-apps-preview-pr-3` is `Synced` and `Healthy`, the Helm source created `web-preview-pr-3/web-helm-addon`, the Deployment still uses the PR image, and root returned to `Synced` and `Healthy`.
