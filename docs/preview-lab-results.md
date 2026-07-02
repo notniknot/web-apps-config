@@ -21,6 +21,7 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Repository bootstrap: working. `web-apps` and `web-apps-config` are initialized and pushed.
 - Private GHCR image and pull secret: partial. GHCR package was created public by default; package API access works after adding package scopes, but changing visibility still needs a follow-up. A real GHCR pull secret is installed, replicated/imported, and referenced by the synced preview Pod.
 - vCluster preview app through Argo CD: working. Argo CD deploys `web-apps-preview-pr-1` into the vCluster API, and vCluster syncs the real Pod and Service into `web-preview-pr-1`.
+- Preview controller automation: working. `notniknot/preview-controller` polls the allowlisted GitHub PRs, detects `preview/playground`, reads `preview.yaml`, creates/updates the preview config branch, writes generated Argo/platform resources, preserves Image Updater digests, and is deployed in the lab cluster.
 - Tenant app-of-apps structure: working. The root repo creates `argocd/web-apps-app-of-apps`, which scans `web-apps-config/apps` and creates the tenant-owned `web/web` Application.
 - Stable parent-cluster app: working. `web/web` deploys `apps/web/playground` into the parent-cluster `web` namespace and the Deployment is Ready.
 - Argo CD Image Updater digest write-back: working. It matched the preview app, resolved `preview-pr-1`, and pushed `digest: sha256:07dc...` into `previews/pr-1/kustomization.yaml`.
@@ -64,7 +65,10 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Lab dependency operator install commit in `argocd`: `06ff35d`.
 - Lab dependency platform resource commit in `argocd`: `976b9f4`.
 - vCluster dependency verifier commit in `web-apps-config`: `d424bdd`.
-- Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:07dc148eef9f847e4fa8b7acf875c127cd343fb02eca1ebdf87f96d9681ac172`.
+- Preview controller image: `ghcr.io/notniknot/preview-controller:latest`, currently also tagged `d23baab`.
+- Controller-generated Argo CD revision for preview-platform: `f302137`.
+- Controller-generated preview config revision: `99df5f6`.
+- Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:120bbbb5702eb2612c6693265abd3334f55fe9aaf6bf7ad7cbfe2eb70781823a`.
 - `argocd/web-apps-app-of-apps` is `Synced` and `Healthy`.
 - `argocd/preview-platform`, `argocd/web-preview-pr-1-vcluster`, and `argocd/web-apps-preview-pr-1` are `Synced` and `Healthy` after the dependency test.
 - `web/web` is `Synced` and `Healthy`.
@@ -79,6 +83,8 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - vCluster-imported translated secrets present: `*-x-web-x-web-pr-1`.
 - Host `HTTPRoute web-preview-pr-1/web-pr-1` has `Accepted=True` and `ResolvedRefs=True`.
 - Internal KGateway curl to `https://web-pr-1.sonia-certs.uk/` returned the app page.
+- In-cluster smoke curl to `https://web-pr-1.sonia-certs.uk/` returned the app page with PR `1`, the replicated secret value, and the generated ESO secret value.
+- The running controller reconciled multiple times without creating new commits after the generated state stabilized.
 
 ## Current Recommended Pattern
 
@@ -96,3 +102,11 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Static S3 CSI PV/PVC worked through vCluster when the platform owned the host PV and the app owned only the vCluster PVC.
 - Argo CD can manage the preview app against the vCluster API, but this lab exposed a controller panic in Argo CD while caching vCluster Pods: `panic: assignment to entry in nil map` in `kubectl/pkg/util/resource.maxResourceList`. The practical mitigation for now is to require complete CPU and memory requests/limits on all preview Pods and hooks, and to avoid leaving stale Argo hook finalizers during crash recovery.
 - Keep operator CRs host-side for now. Letting tenant apps create Redis/RabbitMQ/S3 platform resources inside the vCluster would require extra RBAC, quota, cleanup, and CRD behavior testing.
+
+## Preview Controller Findings
+
+- The first production boundary is GitHub, not Kubernetes. The controller only needs a GitHub token and does not need cluster-wide Kubernetes RBAC because it writes GitOps state and lets Argo CD apply it.
+- The repository binding must stay allowlisted. This lab controller is intentionally limited to `notniknot/web-apps`, `notniknot/web-apps-config`, and `notniknot/argocd`.
+- The controller must preserve fields written by other automation. In this lab, preserving the Image Updater `digest` in the preview branch was required to avoid controller/Image Updater commit churn.
+- Generated preview files should be aggregated under a controller-owned path such as `kubernetes/apps/preview-platform/lab/generated/web-pr-1-platform.yaml`; shared platform resources stay outside the generated file.
+- Long-running polling works once writes are byte-stable. The deployed controller reconciles PR #1 every minute and did not create additional commits after the desired state matched.
