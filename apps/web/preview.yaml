@@ -11,19 +11,16 @@ preview:
   patches:
     - target:
         group: apps
-        version: v1
         kind: Deployment
         name: web
       path: previews/patches/deployment-env.yaml
     - target:
         group: gateway.networking.k8s.io
-        version: v1
         kind: HTTPRoute
         name: web
       path: previews/patches/httproute-hostname.yaml
     - target:
         group: argocd-image-updater.argoproj.io
-        version: v1alpha1
         kind: ImageUpdater
         name: web
       path: previews/patches/image-updater-preview.yaml
