@@ -3,10 +3,7 @@ preview:
   app: web
   tenant: web
   configRepository: web-apps-config
-  configBasePath: apps/web/base
-  componentPath: apps/web/previews/components/preview
   source:
-    mode: inline-kustomize
     path: apps/web/playground
     targetRevision: main
   components:
@@ -32,11 +29,9 @@ preview:
       path: previews/patches/image-updater-preview.yaml
     - target:
         kind: ConfigMap
-        name: preview-inline-demo
-      path: previews/patches/preview-inline-demo.yaml
-  routes:
-    - name: web
-      hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
+        name: preview-demo
+      path: previews/patches/preview-demo.yaml
+  hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
   secrets:
     import:
       - ghcr-pull-secret
