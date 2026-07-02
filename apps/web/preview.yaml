@@ -6,6 +6,7 @@ preview:
   source:
     path: apps/web/playground
     targetRevision: main
+    applicationPath: web-playground.argocd.yaml
   components:
     - ../previews/components
   patches:

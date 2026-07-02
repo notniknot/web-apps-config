@@ -13,6 +13,13 @@ spec:
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
       path: apps/web/playground
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      path: apps/web/helm/addon
+      helm:
+        valueFiles:
+          - values.yaml
+          - ../values/playground-values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: web
