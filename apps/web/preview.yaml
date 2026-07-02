@@ -1,0 +1,33 @@
+preview:
+  enabled: true
+  app: web
+  tenant: web
+  configRepository: web-apps-config
+  configBasePath: apps/web/base
+  componentPath: apps/web/components/preview
+  image:
+    alias: web
+    name: ghcr.io/notniknot/web-apps
+    tagTemplate: preview-pr-{{.PR}}
+  routes:
+    - name: web-pr-{{.PR}}
+      hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
+  secrets:
+    import:
+      - ghcr-pull-secret
+      - shared-preview-secret
+    generated:
+      - generated-preview-secret
+  redis:
+    enabled: true
+  rabbitmq:
+    enabled: true
+  s3:
+    enabled: true
+    bucket: noaa-goes16
+    region: us-east-1
+    prefix: ABI-L1b-RadC/2024/001/00/
+    readOnly: true
+    noSignRequest: true
+  verifier:
+    enabled: true

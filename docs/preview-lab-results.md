@@ -8,10 +8,11 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Code repository: `notniknot/web-apps`.
 - Config repository: `notniknot/web-apps-config`.
 - PR image tag: `ghcr.io/notniknot/web-apps:preview-pr-<number>`.
-- Preview metadata file: `preview.yaml`.
+- App-local preview contract: `apps/web/preview.yaml`.
+- App-local preview component: `apps/web/components/preview`.
 - Stable app pattern: `apps/<app>/base`, `apps/<app>/<env>`, and `apps/<app>/<app>-<env>.argocd.yaml`, matching the real tenant config repositories.
 - Generated preview overlay pattern: `apps/<app>/previews/<environment>/pr-<number>`.
-- For this lab PR, the overlay lives at `apps/web/previews/playground/pr-1`; developers own the stable app base/env overlays and the controller owns generated preview paths.
+- For this lab PR, the generated overlay lives at `apps/web/previews/playground/pr-1` on branch `preview/pr-1`; developers own the stable app base/env overlays and preview component, and the controller owns generated preview paths.
 - Argo CD preview app: `argocd/web-apps-preview-pr-1`.
 - Preview vCluster: `web-pr-1` in host namespace `web-preview-pr-1`.
 - Preview URL tested internally through KGateway: `https://web-pr-1.sonia-certs.uk/`.
@@ -21,7 +22,7 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Repository bootstrap: working. `web-apps` and `web-apps-config` are initialized and pushed.
 - Private GHCR image and pull secret: partial. GHCR package was created public by default; package API access works after adding package scopes, but changing visibility still needs a follow-up. A real GHCR pull secret is installed, replicated/imported, and referenced by the synced preview Pod.
 - vCluster preview app through Argo CD: working. Argo CD deploys `web-apps-preview-pr-1` into the vCluster API, and vCluster syncs the real Pod and Service into `web-preview-pr-1`.
-- Preview controller automation: working. `notniknot/preview-controller` polls the allowlisted GitHub PRs, detects `preview/playground`, reads `preview.yaml`, creates/updates the preview config branch, writes generated Argo/platform resources, preserves Image Updater digests, and is deployed in the lab cluster.
+- Preview controller automation: working. `notniknot/preview-controller` polls the allowlisted GitHub PRs, detects `preview/playground`, reads `apps/web/preview.yaml` from the config repo, creates/updates the preview config branch, writes generated Argo/platform resources, preserves Image Updater digests, and is deployed in the lab cluster.
 - Tenant app-of-apps structure: working. The root repo creates `argocd/web-apps-app-of-apps`, which scans `web-apps-config/apps` and creates the tenant-owned `web/web` Application.
 - Stable parent-cluster app: working. `web/web` deploys `apps/web/playground` into the parent-cluster `web` namespace and the Deployment is Ready.
 - Argo CD Image Updater digest write-back: working. It matched the preview app, resolved `preview-pr-1`, and pushed `digest: sha256:120...` into `apps/web/previews/playground/pr-1/kustomization.yaml`.
@@ -65,7 +66,7 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 - Lab dependency operator install commit in `argocd`: `06ff35d`.
 - Lab dependency platform resource commit in `argocd`: `976b9f4`.
 - vCluster dependency verifier commit in `web-apps-config`: `d424bdd`.
-- Preview controller image: `ghcr.io/notniknot/preview-controller:latest`, currently also tagged `d23baab`.
+- Preview controller image: `ghcr.io/notniknot/preview-controller:latest`.
 - Controller-generated Argo CD revision for preview-platform: `f302137`.
 - Controller-generated preview config revision: `99df5f6`.
 - Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:120bbbb5702eb2612c6693265abd3334f55fe9aaf6bf7ad7cbfe2eb70781823a`.
@@ -89,6 +90,8 @@ workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
 ## Current Recommended Pattern
 
 - App overlay in `web-apps-config` should own only normal namespaced workload resources inside the vCluster.
+- App teams should keep their preview contract at `apps/<app>/preview.yaml` and reusable preview-only resources at `apps/<app>/components/preview`.
+- The controller should generate only thin PR overlays under `apps/<app>/previews/<environment>/pr-<number>` and reference the app component with Kustomize `components`.
 - Preview controller/platform owns host namespace, vCluster, replicated/imported secrets, generated host `ExternalSecret`, generated host `HTTPRoute`, ImageUpdater CR, and Argo CD Application.
 - Use OSS vCluster with `sync.fromHost.secrets` for pull/application secrets and normal workload sync for Pods/Services.
 - Avoid vCluster Pro-only integrations in the OSS setup.

@@ -5,7 +5,6 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: PostSync
     argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
-    lab.sonia.so/run: dependency-verifier-20260701-2
 spec:
   backoffLimit: 0
   template:
