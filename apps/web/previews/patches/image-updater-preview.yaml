@@ -14,4 +14,4 @@
   value: newest-build
 - op: add
   path: /spec/applicationRefs/0/images/0/commonUpdateSettings/allowTags
-  value: regexp:^preview-pr-{{.PR}}-.*
+  value: regexp:^{{.Values.imageTagPrefix}}.*

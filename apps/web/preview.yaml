@@ -31,7 +31,9 @@ preview:
         kind: ConfigMap
         name: preview-demo
       path: previews/patches/preview-demo.yaml
-  hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
+  values:
+    hostname: web-pr-{{.PR}}.sonia-certs.uk
+    imageTagPrefix: preview-pr-{{.PR}}-
   secrets:
     import:
       - ghcr-pull-secret

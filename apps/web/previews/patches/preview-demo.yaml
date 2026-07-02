@@ -3,4 +3,4 @@
   value: "{{.PR}}"
 - op: replace
   path: /data/hostname
-  value: "{{.PrimaryHostname}}"
+  value: "{{.Values.hostname}}"
