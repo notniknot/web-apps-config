@@ -5,10 +5,34 @@ preview:
   configRepository: web-apps-config
   configBasePath: apps/web/base
   componentPath: apps/web/components/preview
+  source:
+    mode: inline-kustomize
+    path: apps/web/playground
+    targetRevision: main
+  components:
+    - ../components/preview
   image:
     alias: web
     name: ghcr.io/notniknot/web-apps
     tagTemplate: preview-pr-{{.PR}}
+  patches:
+    - target:
+        kind: Deployment
+        name: web
+      patchTemplate: |
+        - op: replace
+          path: /spec/template/spec/containers/0/env/2/value
+          value: "{{.PR}}"
+    - target:
+        kind: ConfigMap
+        name: preview-inline-demo
+      patchTemplate: |
+        - op: replace
+          path: /data/pr
+          value: "{{.PR}}"
+        - op: replace
+          path: /data/hostname
+          value: "{{.PrimaryHostname}}"
   routes:
     - name: web-pr-{{.PR}}
       hostnameTemplate: web-pr-{{.PR}}.sonia-certs.uk
@@ -30,4 +54,4 @@ preview:
     readOnly: true
     noSignRequest: true
   verifier:
-    enabled: true
+    enabled: false
