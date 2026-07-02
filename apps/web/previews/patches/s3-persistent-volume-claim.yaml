@@ -1,0 +1,3 @@
+- op: replace
+  path: /spec/volumeName
+  value: web-pr-{{.PR}}-s3-public
