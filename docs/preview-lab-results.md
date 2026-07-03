@@ -49,6 +49,13 @@ spec:
   configRepository: notniknot/web-apps-config
   application:
     path: web-playground.argocd.yaml
+  pullRequests:
+    code:
+      configPRField: Preview-Config-PR
+      configPRCommand: /preview config-pr
+    config:
+      codePRField: Preview-Code-PR
+      codePRCommand: /preview code-pr
   sourcePolicy: include-all
   sources:
     - index: 0
@@ -82,6 +89,8 @@ Notes:
   and authorization inputs used for names, namespaces, labels, and template data.
 - `application.path` points to the existing Argo CD Application YAML in the
   tenant config repository.
+- `pullRequests` defines the PR body fields/commands the controller uses to link
+  code PRs and config PRs.
 - `sources[*].index` maps to `spec.sources[index]` of that Argo CD Application.
 - Kustomize patches can be inline or loaded from files under
   `apps/<app>/previews/patches`.
@@ -187,6 +196,8 @@ Cleanup:
 - A config PR can either create a config-only preview or attach to an open code
   PR.
 - A code PR can explicitly select a config PR.
+- PR link fields and slash-style commands are loaded from `spec.pullRequests` in
+  the main-branch preview config, with the documented defaults as fallback.
 - Cleanup is idempotent: later polls do not create additional Git commits after
   the generated state is gone.
 - Info logs are emitted only when Git state actually changes. Steady-state
@@ -223,6 +234,7 @@ improvement.
   - config-only PR
   - config PR attached after a code preview already exists
   - config PR as the trigger for an open code PR
+  - custom PR link field/command names from `spec.pullRequests`
   - missing linked config PR fallback to `main`
   - config PR linked to a missing code PR
   - cleanup for code-owned and config-owned previews
