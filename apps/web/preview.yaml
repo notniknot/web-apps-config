@@ -7,6 +7,13 @@ spec:
   configRepository: notniknot/web-apps-config
   application:
     path: web-playground.argocd.yaml
+  pullRequests:
+    code:
+      configPRField: Preview-Config-PR
+      configPRCommand: /preview config-pr
+    config:
+      codePRField: Preview-Code-PR
+      codePRCommand: /preview code-pr
   sourcePolicy: include-all
   sources:
     - index: 0
@@ -46,10 +53,10 @@ spec:
       action: keep
       helm:
         valuesObject:
-          message: preview-pr-{{.PR}}
+          message: preview-{{.PreviewID}}
   values:
-    hostname: web-pr-{{.PR}}.sonia-certs.uk
-    imageTagPrefix: preview-pr-{{.PR}}-
+    hostname: web-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix: preview-{{.PreviewID}}-
   secrets:
     import:
       - ghcr-pull-secret

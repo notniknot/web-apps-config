@@ -31,6 +31,10 @@ This document records the lab result for self-service preview environments using
   `apps/<app>/<app>-<env>.argocd.yaml`.
 - Preview namespace pattern: `<tenant>-preview-pr-<number>`.
 - Preview Argo CD application pattern: `<app>-apps-preview-pr-<number>`.
+- Config-only preview namespace pattern:
+  `<tenant>-preview-config-pr-<number>`.
+- Config-only preview Argo CD application pattern:
+  `<app>-apps-preview-config-pr-<number>`.
 
 ## PreviewEnvironment Contract
 
@@ -62,7 +66,10 @@ spec:
       action: keep
       helm:
         valuesObject:
-          message: preview-pr-{{.PR}}
+          message: preview-{{.PreviewID}}
+  values:
+    hostname: web-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix: preview-{{.PreviewID}}-
 ```
 
 Notes:
@@ -80,6 +87,89 @@ Notes:
   `apps/<app>/previews/patches`.
 - Helm sources can receive extra `valueFiles` and inline `valuesObject`.
 - `$values/...` Helm value file references can be supported through `valueRefs`.
+- `{{.PreviewID}}` is stable and collision-safe:
+  - code PR preview: `pr-123`
+  - config-only PR preview: `config-pr-42`
+  - linked code+config preview: the code PR identity, for example `pr-123`
+- `{{.PR}}` remains available for compatibility and is the owner PR number.
+
+## Code And Config PR Workflows
+
+### Code PR Only
+
+Workflow:
+
+1. Developer opens a PR in `notniknot/web-apps`.
+2. CI builds an image with a preview tag such as `preview-pr-123-<sha>`.
+3. Developer adds `preview/playground`.
+4. The controller creates preview identity `pr-123`.
+5. Generated resources use names such as:
+   - namespace `web-preview-pr-123`
+   - Argo CD app `web-apps-preview-pr-123`
+   - hostname `web-pr-123.sonia-certs.uk`
+6. Tenant config is read from `main`.
+7. Image Updater can select the matching PR image.
+
+Cleanup:
+
+- Removing the label or closing the code PR removes the generated preview.
+
+### Code PR With Config PR
+
+Workflow:
+
+1. Developer opens a PR in `notniknot/web-apps`.
+2. Developer opens a PR in `notniknot/web-apps-config`.
+3. The code PR can link the config PR with one of:
+   - `Preview-Config-PR: 42`
+   - `/preview config-pr 42`
+4. The controller creates or updates preview identity `pr-<code-pr>`.
+5. The generated Argo CD Application keeps the same namespace, hostname, and app
+   name as the code-only preview.
+6. Config repository sources are rewritten to the config PR head SHA.
+7. Config-only preview `config-pr-42` is not created.
+
+Cleanup:
+
+- Removing the code PR label cleans the code-owned environment unless a labeled
+  config PR is explicitly linked to that open code PR.
+- Closing the code PR removes the environment.
+
+### Config PR Only
+
+Workflow:
+
+1. Developer opens a PR in `notniknot/web-apps-config`.
+2. Developer adds `preview/playground` to the config PR.
+3. The controller creates preview identity `config-pr-<config-pr>`.
+4. Generated resources use names such as:
+   - namespace `web-preview-config-pr-42`
+   - Argo CD app `web-apps-preview-config-pr-42`
+   - hostname `web-config-pr-42.sonia-certs.uk`
+5. Config repository sources are rewritten to the config PR head SHA.
+6. The app uses the image resolved by the config branch/default app config.
+
+Cleanup:
+
+- Removing the label or closing the config PR removes the generated preview.
+
+### Config PR Attached After Code Preview Exists
+
+Workflow:
+
+1. Developer first creates a code PR preview, for example `pr-123`.
+2. Later, developer opens a config PR.
+3. The config PR links back to the code PR with one of:
+   - `Preview-Code-PR: 123`
+   - `/preview code-pr 123`
+4. The controller updates the existing `pr-123` preview in place.
+5. No config-only preview is created.
+
+Cleanup:
+
+- If the config PR label is removed, the code preview falls back to the code-only
+  flow as long as the code PR still carries the preview label.
+- If both preview triggers are gone, the environment is removed.
 
 ## Controller Behavior
 
@@ -93,6 +183,10 @@ Notes:
   files.
 - For a PR without the label, or a closed PR, it removes generated tenant and
   platform files.
+- It watches both the code repository and the tenant config repository.
+- A config PR can either create a config-only preview or attach to an open code
+  PR.
+- A code PR can explicitly select a config PR.
 - Cleanup is idempotent: later polls do not create additional Git commits after
   the generated state is gone.
 - Info logs are emitted only when Git state actually changes. Steady-state
@@ -123,6 +217,16 @@ improvement.
   `Healthy`.
 - Controller log-noise fix was deployed and verified: with no active preview
   labels, logs stayed quiet across an idle poll interval.
+- Unit tests now cover:
+  - code PR only
+  - code PR explicitly linked to a config PR
+  - config-only PR
+  - config PR attached after a code preview already exists
+  - config PR as the trigger for an open code PR
+  - missing linked config PR fallback to `main`
+  - config PR linked to a missing code PR
+  - cleanup for code-owned and config-owned previews
+  - idempotent cleanup
 
 ## Multi-Source Argo CD Applications
 
@@ -265,6 +369,8 @@ Current decision:
 - Controller Prometheus metrics.
 - User-facing events or comments explaining preview creation failures.
 - Multi-app PR behavior, where one code PR creates multiple preview apps.
+- Real-cluster smoke test for code+config PR coupling after deployment.
+- Real-cluster smoke test for config-only previews after deployment.
 - Private GHCR package visibility test.
 - Gateway API policy resources.
 - Metrics scraping.
