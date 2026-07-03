@@ -1,6 +1,6 @@
 - op: replace
   path: /metadata/name
-  value: web-pr-{{.PR}}-s3-public
+  value: web-{{.PreviewID}}-s3-public
 - op: replace
   path: /spec/claimRef/namespace
   value: {{.HostNamespace}}
