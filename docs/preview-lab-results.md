@@ -35,6 +35,10 @@ This document records the lab result for self-service preview environments using
   `<tenant>-preview-config-pr-<number>`.
 - Config-only preview Argo CD application pattern:
   `<app>-apps-preview-config-pr-<number>`.
+- Explicit code+config preview namespace pattern:
+  `<tenant>-preview-pr-<code-pr>-config-pr-<config-pr>`.
+- Explicit code+config preview Argo CD application pattern:
+  `<app>-apps-preview-pr-<code-pr>-config-pr-<config-pr>`.
 
 ## PreviewEnvironment Contract
 
@@ -99,7 +103,7 @@ Notes:
 - `{{.PreviewID}}` is stable and collision-safe:
   - code PR preview: `pr-123`
   - config-only PR preview: `config-pr-42`
-  - linked code+config preview: the code PR identity, for example `pr-123`
+  - linked code+config preview: `pr-123-config-pr-42`
 - `{{.PR}}` remains available for compatibility and is the owner PR number.
 
 ## Code And Config PR Workflows
@@ -132,17 +136,20 @@ Workflow:
 3. The code PR can link the config PR with one of:
    - `Preview-Config-PR: 42`
    - `/preview config-pr 42`
-4. The controller creates or updates preview identity `pr-<code-pr>`.
-5. The generated Argo CD Application keeps the same namespace, hostname, and app
-   name as the code-only preview.
+4. The controller creates preview identity
+   `pr-<code-pr>-config-pr-<config-pr>`.
+5. The generated Argo CD Application uses separate namespace, hostname, and app
+   name from the code-only preview.
 6. Config repository sources are rewritten to the config PR head SHA.
 7. Config-only preview `config-pr-42` is not created.
+8. Multiple config PRs can point at the same code PR and each receives its own
+   environment.
 
 Cleanup:
 
-- Removing the code PR label cleans the code-owned environment unless a labeled
-  config PR is explicitly linked to that open code PR.
-- Closing the code PR removes the environment.
+- Removing the code PR label cleans code-body-triggered linked environments.
+- Removing the config PR label cleans config-body-triggered linked environments.
+- Closing either PR removes the linked environment.
 
 ### Config PR Only
 
@@ -171,14 +178,32 @@ Workflow:
 3. The config PR links back to the code PR with one of:
    - `Preview-Code-PR: 123`
    - `/preview code-pr 123`
-4. The controller updates the existing `pr-123` preview in place.
+4. The controller creates `pr-123-config-pr-42` as a separate linked preview.
 5. No config-only preview is created.
 
 Cleanup:
 
-- If the config PR label is removed, the code preview falls back to the code-only
-  flow as long as the code PR still carries the preview label.
-- If both preview triggers are gone, the environment is removed.
+- If the config PR label is removed, the linked preview is removed.
+- If the code PR still carries the preview label and no linked config preview is
+  active, the code-only preview can exist as `pr-123`.
+
+### Multiple Linked Preview Variants
+
+Workflow:
+
+1. Two config PRs can both link to one code PR:
+   - config PR `42`: `Preview-Code-PR: 123`
+   - config PR `43`: `Preview-Code-PR: 123`
+2. The controller creates:
+   - `pr-123-config-pr-42`
+   - `pr-123-config-pr-43`
+3. One config PR can also link to multiple code PRs by repeating the body field:
+   - `Preview-Code-PR: 123`
+   - `Preview-Code-PR: 124`
+4. Multiple code PRs can link to the same config PR with:
+   - `Preview-Config-PR: 42`
+5. Each code/config pair receives a dedicated namespace, hostname, and Argo CD
+   Application.
 
 ## Controller Behavior
 
@@ -196,6 +221,8 @@ Cleanup:
 - A config PR can either create a config-only preview or attach to an open code
   PR.
 - A code PR can explicitly select a config PR.
+- Explicit code/config pairings use composite preview IDs, so variants do not
+  overwrite each other.
 - PR link fields and slash-style commands are loaded from `spec.pullRequests` in
   the main-branch preview config, with the documented defaults as fallback.
 - Cleanup is idempotent: later polls do not create additional Git commits after
@@ -234,9 +261,13 @@ improvement.
   - config-only PR
   - config PR attached after a code preview already exists
   - config PR as the trigger for an open code PR
+  - multiple config PRs attached to the same code PR
+  - one config PR attached to multiple code PRs
+  - multiple code PRs selecting the same config PR
   - custom PR link field/command names from `spec.pullRequests`
   - missing linked config PR fallback to `main`
   - config PR linked to a missing code PR
+  - cleanup for composite code+config preview identities
   - cleanup for code-owned and config-owned previews
   - idempotent cleanup
 
