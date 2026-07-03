@@ -1,124 +1,276 @@
-# vCluster Preview Lab Results
+# Preview Environment Lab Results
 
-This document records the manual rehearsal of the future preview controller
-workflow for `notniknot/web-apps` and `notniknot/web-apps-config`.
+Last updated: 2026-07-03.
+
+This document records the lab result for self-service preview environments using
+`notniknot/web-apps`, `notniknot/web-apps-config`, `notniknot/argocd`, and
+`notniknot/preview-controller`.
+
+## Current Direction
+
+- Use normal host-cluster namespaces for preview environments first.
+- Do not use vCluster in the current implementation path.
+- Let Argo CD deploy generated preview `Application` resources into dedicated
+  namespaces such as `web-preview-pr-3`.
+- Keep platform-owned resources in the host cluster and generated through GitOps.
+- Keep tenant-owned preview configuration inside the tenant config repository.
+- Use the controller as the automation layer that reacts to GitHub PR labels and
+  writes generated GitOps resources.
 
 ## Repository Contract
 
 - Code repository: `notniknot/web-apps`.
-- Config repository: `notniknot/web-apps-config`.
-- PR image tag: `ghcr.io/notniknot/web-apps:preview-pr-<number>`.
+- Tenant config repository: `notniknot/web-apps-config`.
+- Root/Argo CD config repository: `notniknot/argocd`.
+- Controller repository: `notniknot/preview-controller`.
+- Preview label: `preview/playground`.
 - App-local preview contract: `apps/web/preview.yaml`.
-- App-local preview component: `apps/web/previews/components`.
-- Stable app pattern: `apps/<app>/base`, `apps/<app>/<env>`, and `apps/<app>/<app>-<env>.argocd.yaml`, matching the real tenant config repositories.
-- Generated preview overlay pattern: `apps/<app>/previews/<environment>/pr-<number>`.
-- For this lab PR, the generated overlay lives at `apps/web/previews/playground/pr-1` on branch `preview/pr-1`; developers own the stable app base/env overlays and preview component, and the controller owns generated preview paths.
-- Argo CD preview app: `argocd/web-apps-preview-pr-1`.
-- Preview vCluster: `web-pr-1` in host namespace `web-preview-pr-1`.
-- Preview URL tested internally through KGateway: `https://web-pr-1.sonia-certs.uk/`.
+- App-local preview components: `apps/web/previews/components`.
+- App-local preview patches: `apps/web/previews/patches`.
+- Stable app structure: `apps/<app>/base`, `apps/<app>/<env>`, and
+  `apps/<app>/<app>-<env>.argocd.yaml`.
+- Preview namespace pattern: `<tenant>-preview-pr-<number>`.
+- Preview Argo CD application pattern: `<app>-apps-preview-pr-<number>`.
 
-## Use Case Results
+## PreviewEnvironment Contract
 
-- Repository bootstrap: working. `web-apps` and `web-apps-config` are initialized and pushed.
-- Private GHCR image and pull secret: partial. GHCR package was created public by default; package API access works after adding package scopes, but changing visibility still needs a follow-up. A real GHCR pull secret is installed, replicated/imported, and referenced by the synced preview Pod.
-- vCluster preview app through Argo CD: working. Argo CD deploys `web-apps-preview-pr-1` into the vCluster API, and vCluster syncs the real Pod and Service into `web-preview-pr-1`.
-- Preview controller automation: working. `notniknot/preview-controller` polls the allowlisted GitHub PRs, detects `preview/playground`, reads `apps/web/preview.yaml` from the config repo, creates/updates the preview config branch, writes generated Argo/platform resources, preserves Image Updater digests, and is deployed in the lab cluster.
-- Tenant app-of-apps structure: working. The root repo creates `argocd/web-apps-app-of-apps`, which scans `web-apps-config/apps` and creates the tenant-owned `web/web` Application.
-- Stable parent-cluster app: working. `web/web` deploys `apps/web/playground` into the parent-cluster `web` namespace and the Deployment is Ready.
-- Argo CD Image Updater digest write-back: working. It matched the preview app, resolved `preview-pr-1`, and pushed `digest: sha256:120...` into `apps/web/previews/playground/pr-1/kustomization.yaml`.
-- Shared replicated secret: working at host level. `shared-preview-secret` was copied from `web` to `web-preview-pr-1` by mittwald replicator.
-- Per-preview generated ExternalSecret: working with host-side generation. vCluster's built-in `integrations.externalSecrets` setting is a vCluster Pro feature, so OSS vCluster cannot use that integration directly. For OSS, the platform/controller should generate the `ExternalSecret` in the host preview namespace and let vCluster import the resulting Secret.
-- Gateway API HTTPRoute through KGateway: working with host-side generation. Declaring `HTTPRoute` inside the vCluster caused Argo CD comparison trouble and did not produce a host-side route in this test. The simpler controller-owned pattern is to generate the host `HTTPRoute` in the preview namespace and point it at the vCluster-synced Service.
-- Gateway API policy resources: pending.
-- Metrics scraping from vCluster workloads: not installed yet. The synced Service and Pod have stable labels in the host namespace, so the likely pattern is controller-generated host-side `VMServiceScrape` or `VMPodScrape`.
-- Grafana dashboard resources: not installed yet. Keep `GrafanaDashboard` host-side/platform-owned unless tenant dashboard CRDs are deliberately allowlisted.
-- Redis operator dependency: working with host-side operator ownership. The lab creates a host-side `Redis` CR in `web-preview-pr-1`, imports the generated/password Secret into the vCluster, replicates the host Service into the vCluster, and a vCluster Job successfully ran `redis-cli ping`.
-- RabbitMQ operator dependency: working with host-side operator ownership. The lab creates a host-side `RabbitmqCluster`, imports the generated default-user Secret into the vCluster, replicates the host Service into the vCluster, and a vCluster Job successfully reached port `5672`.
-- CNPG dependency: not installed yet. Treat as a separate database mode with strict cleanup and credentials policy.
-- PersistentVolumeClaim and S3 Mountpoint CSI: working with host-side static PV ownership. The lab uses AWS Mountpoint S3 CSI with a static host `PersistentVolume`, a vCluster PVC, and the vCluster verifier Job successfully listed a public S3 bucket mounted at `/mnt/s3`.
-- OpenTelemetry instrumentation: not installed yet. Prefer host-side operator policy or explicit app instrumentation before syncing arbitrary `Instrumentation` CRs.
-- Cluster-scoped/RBAC resources: not tested in this run. Preview AppProject should continue to block broad cluster-scoped resources for tenant apps.
+`apps/web/preview.yaml` is now a CRD-shaped document:
 
-## App-Of-Apps Structure
+```yaml
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewEnvironment
+metadata:
+  name: web-playground
+spec:
+  configRepository: notniknot/web-apps-config
+  application:
+    path: web-playground.argocd.yaml
+  sourcePolicy: include-all
+  sources:
+    - index: 0
+      action: keep
+      kustomize:
+        components:
+          - ../previews/components
+        patches:
+          - target:
+              group: gateway.networking.k8s.io
+              kind: HTTPRoute
+              name: web
+            path: previews/patches/httproute-hostname.yaml
+    - index: 1
+      action: keep
+      helm:
+        valuesObject:
+          message: preview-pr-{{.PR}}
+```
 
-- Infra/root repo owns tenant `AppProject` resources and the tenant app-of-apps `Application`.
-- Tenant config repo owns child application manifests under `apps/<app>/<app>-<env>.argocd.yaml`.
-- For this lab, `web-apps-app-of-apps` scans `notniknot/web-apps-config/apps` for `*-playground.argocd.yaml`.
-- The stable lab app is `web/web`, deployed from `apps/web/playground` to the parent-cluster `web` namespace.
-- The preview app stays separate as generated/controller-owned infrastructure: `argocd/web-apps-preview-pr-1` points to the vCluster API and deploys `apps/web/previews/playground/pr-1`.
+Notes:
 
-## Dependency Patterns
+- `configRepository` uses the full GitHub name, for example
+  `notniknot/web-apps-config`.
+- `app` and `tenant` are intentionally not part of the tenant-owned
+  `PreviewEnvironment` spec.
+- `app` and `tenant` remain in the controller allowlist because they are identity
+  and authorization inputs used for names, namespaces, labels, and template data.
+- `application.path` points to the existing Argo CD Application YAML in the
+  tenant config repository.
+- `sources[*].index` maps to `spec.sources[index]` of that Argo CD Application.
+- Kustomize patches can be inline or loaded from files under
+  `apps/<app>/previews/patches`.
+- Helm sources can receive extra `valueFiles` and inline `valuesObject`.
+- `$values/...` Helm value file references can be supported through `valueRefs`.
 
-- Redis: operate the Redis operator in the host cluster. For previews, the controller should create a tightly-scoped host-side Redis CR or choose a shared Redis mode, then import only the connection Secret into the vCluster. Do not let arbitrary tenant preview apps create Redis operator CRs inside vCluster until RBAC, cleanup, and quota behavior are tested.
-- RabbitMQ: same boundary as Redis. Keep the RabbitMQ operator host-side, create per-preview `RabbitmqCluster` resources only through platform automation, and sync the generated connection Secret into the vCluster for the app.
-- S3 Mountpoint CSI: operate the CSI driver in the host cluster. The vCluster app can use a PVC only if the host PV/PVC contract is generated and synced correctly. Bucket credentials, bucket naming, access mode, and cleanup should be platform-owned, usually with an imported Secret plus generated static PV/PVC resources.
-- Shared dependency Secret flow: ESO or another host mechanism creates the source Secret in the tenant namespace, mittwald replicator copies it into `web-preview-pr-<n>`, and `sync.fromHost.secrets` imports it into the vCluster.
-- Per-preview generated Secret flow: the preview controller creates an `ExternalSecret` or plain generated Secret in the host preview namespace, waits for the resulting Secret, and `sync.fromHost.secrets` imports it into the vCluster.
-- Per-preview Redis/RabbitMQ flow: the preview controller creates host-side operator CRs in the host preview namespace, waits for Ready conditions and generated connection Secrets, configures vCluster `sync.fromHost.secrets`, and configures vCluster `networking.replicateServices.fromHost` so the app connects to normal in-vCluster Service names.
-- Per-preview S3 CSI flow: the preview controller creates or selects host-side S3 credentials, creates the static host `PersistentVolume` with the S3 CSI driver, and lets the tenant preview overlay create the matching PVC inside the vCluster. Keep bucket naming, credentials, lifecycle, and cleanup platform-owned.
+## Controller Behavior
 
-## Verified Commands/Signals
+- The controller polls allowlisted GitHub repositories.
+- For an open PR with `preview/playground`, it reads the app-local
+  `PreviewEnvironment` contract from the tenant config repository.
+- It renders a generated Argo CD `Application` into `notniknot/argocd`.
+- It renders host-side platform resources such as namespace and generated
+  `ExternalSecret` manifests into `notniknot/argocd`.
+- It updates the preview-platform kustomization to include generated platform
+  files.
+- For a PR without the label, or a closed PR, it removes generated tenant and
+  platform files.
+- Cleanup is idempotent: later polls do not create additional Git commits after
+  the generated state is gone.
+- Info logs are emitted only when Git state actually changes. Steady-state
+  no-op reconcile/cleanup messages are debug-level.
 
-- GitHub PR #1 with label `preview/playground` built `ghcr.io/notniknot/web-apps:preview-pr-1`.
-- Image Updater wrote commit `7035026` to `web-apps-config`.
-- Tenant app-of-apps commit in `argocd`: `a5fb10f`.
-- Real-style tenant config commit in `web-apps-config`: `1cdf33e`.
-- Lab dependency operator install commit in `argocd`: `06ff35d`.
-- Lab dependency platform resource commit in `argocd`: `976b9f4`.
-- vCluster dependency verifier commit in `web-apps-config`: `d424bdd`.
-- Preview controller image: `ghcr.io/notniknot/preview-controller:latest`.
-- Controller-generated Argo CD revision for preview-platform: `f302137`.
-- Controller-generated preview config revision: `99df5f6`.
-- Current preview overlay renders `ghcr.io/notniknot/web-apps:preview-pr-1@sha256:120bbbb5702eb2612c6693265abd3334f55fe9aaf6bf7ad7cbfe2eb70781823a`.
-- `argocd/web-apps-app-of-apps` is `Synced` and `Healthy`.
-- `argocd/preview-platform`, `argocd/web-preview-pr-1-vcluster`, and `argocd/web-apps-preview-pr-1` are `Synced` and `Healthy` after the dependency test.
-- `web/web` is `Synced` and `Healthy`.
-- Parent-cluster `web` Deployment is `1/1` Ready.
-- `argocd/redis-operator`, `argocd/rabbitmq-operator`, and `argocd/mountpoint-s3` are `Synced` and `Healthy`.
-- Redis CRDs verified: `redis.redis.redis.opstreelabs.in`, `redisclusters.redis.redis.opstreelabs.in`, `redisreplications.redis.redis.opstreelabs.in`, `redissentinels.redis.redis.opstreelabs.in`.
-- RabbitMQ CRD verified: `rabbitmqclusters.rabbitmq.com`.
-- Mountpoint S3 verified: `CSIDriver s3.csi.aws.com` and `mountpoints3podattachments.s3.csi.aws.com`.
-- Preview dependency test verified from inside the vCluster: Redis ping, RabbitMQ TCP connect, imported Redis/RabbitMQ Secrets, and S3 PVC mount/listing all succeeded.
-- Synced host Pod uses the pinned digest and is Ready.
-- Host secrets present: `ghcr-pull-secret`, `shared-preview-secret`, `generated-preview-secret`.
-- vCluster-imported translated secrets present: `*-x-web-x-web-pr-1`.
-- Host `HTTPRoute web-preview-pr-1/web-pr-1` has `Accepted=True` and `ResolvedRefs=True`.
-- Internal KGateway curl to `https://web-pr-1.sonia-certs.uk/` returned the app page.
-- In-cluster smoke curl to `https://web-pr-1.sonia-certs.uk/` returned the app page with PR `1`, the replicated secret value, and the generated ESO secret value.
-- The running controller reconciled multiple times without creating new commits after the generated state stabilized.
+The controller currently uses polling. GitHub webhooks remain a future
+improvement.
 
-## Current Recommended Pattern
+## Verified Use Cases
 
-- App overlay in `web-apps-config` should own only normal namespaced workload resources inside the vCluster.
-- App teams should keep their preview contract at `apps/<app>/preview.yaml` and reusable preview-only resources at `apps/<app>/previews/components`.
-- The controller should generate only thin PR overlays under `apps/<app>/previews/<environment>/pr-<number>` and reference the app component with Kustomize `components`.
-- Preview controller/platform owns host namespace, vCluster, replicated/imported secrets, generated host `ExternalSecret`, generated host `HTTPRoute`, ImageUpdater CR, and Argo CD Application.
-- Use OSS vCluster with `sync.fromHost.secrets` for pull/application secrets and normal workload sync for Pods/Services.
-- Avoid vCluster Pro-only integrations in the OSS setup.
-- Avoid Argo CD server-side diff/apply on preview apps that include CRDs inside vCluster unless tested per CRD.
+- Repository bootstrap is working.
+- Tenant app-of-apps is working.
+- Stable `web/web` app in the parent cluster is working.
+- `PreviewEnvironment` CRD is installed in the lab cluster.
+- Preview controller is built and pushed as
+  `ghcr.io/notniknot/preview-controller:latest`.
+- Controller deployment in `preview-controller` namespace is healthy.
+- PR label detection works for `preview/playground`.
+- Generated preview Argo CD apps were created for PRs `1` and `3`.
+- Generated preview apps reached `Synced` and `Healthy`.
+- Dedicated preview namespaces were created for PRs `1` and `3`.
+- Removing the label from PRs `1` and `3` cleaned up:
+  - generated tenant Argo CD Application files
+  - generated preview-platform files
+  - generated Argo CD Application objects
+  - preview namespaces `web-preview-pr-1` and `web-preview-pr-3`
+- Root, preview-platform, and tenant app-of-apps returned to `Synced` and
+  `Healthy`.
+- Controller log-noise fix was deployed and verified: with no active preview
+  labels, logs stayed quiet across an idle poll interval.
 
-## vCluster Lab Findings
+## Multi-Source Argo CD Applications
 
-- OSS vCluster is enough for this pattern. We did not need vCluster Pro integrations for Redis, RabbitMQ, or S3; the boundary was host-side platform resources plus explicit sync/replication into the virtual cluster.
-- Host-to-vCluster Secret import worked for replicated pull/shared Secrets and generated dependency Secrets.
-- Host-to-vCluster Service replication worked for Redis and RabbitMQ, allowing the preview app to use normal in-vCluster Service names.
-- Static S3 CSI PV/PVC worked through vCluster when the platform owned the host PV and the app owned only the vCluster PVC.
-- Argo CD can manage the preview app against the vCluster API, but this lab exposed a controller panic in Argo CD while caching vCluster Pods: `panic: assignment to entry in nil map` in `kubectl/pkg/util/resource.maxResourceList`. The practical mitigation for now is to require complete CPU and memory requests/limits on all preview Pods and hooks, and to avoid leaving stale Argo hook finalizers during crash recovery.
-- Keep operator CRs host-side for now. Letting tenant apps create Redis/RabbitMQ/S3 platform resources inside the vCluster would require extra RBAC, quota, cleanup, and CRD behavior testing.
+The lab app uses `spec.sources`.
 
-## Preview Controller Findings
+The preview controller copies the source list from the referenced Argo CD
+Application and mutates sources by index:
 
-- The first production boundary is GitHub, not Kubernetes. The controller only needs a GitHub token and does not need cluster-wide Kubernetes RBAC because it writes GitOps state and lets Argo CD apply it.
-- The repository binding must stay allowlisted. This lab controller is intentionally limited to `notniknot/web-apps`, `notniknot/web-apps-config`, and `notniknot/argocd`.
-- The controller must preserve fields written by other automation. In this lab, preserving the Image Updater `digest` in the preview branch was required to avoid controller/Image Updater commit churn.
-- Generated preview files should be aggregated under a controller-owned path such as `kubernetes/apps/preview-platform/lab/generated/web-pr-1-platform.yaml`; shared platform resources stay outside the generated file.
-- Long-running polling works once writes are byte-stable. The deployed controller reconciles PR #1 every minute and did not create additional commits after the desired state matched.
+- `sourcePolicy: include-all` keeps all sources unless a source rule says
+  `action: drop`.
+- `sourcePolicy: include-listed` keeps only explicitly listed source indexes.
+- Kustomize mutations are applied only to selected Kustomize sources.
+- Helm mutations are applied only to selected Helm sources.
+- The generated preview Application still emits a compatibility `spec.source`
+  copied from the first source because the root app uses server-side dry-run and
+  rejected child Applications when `spec.source.repoURL` was absent.
 
-## Host-Namespace Preview Update
+## Image Updates
 
-- Removing the `preview/playground` label from PR #2 cleaned up the generated Argo CD Application, generated platform file, and `web-preview-pr-2` namespace. The cleanup was eventually consistent: Git was cleaned first, then Argo CD pruned the platform namespace.
-- Generated preview Applications now include `resources-finalizer.argocd.argoproj.io` so deleting the Application can cascade workload resources instead of relying only on namespace pruning.
-- The normal `web` app now uses `spec.sources` with a Kustomize workload source and a tiny Helm addon source. The generated preview app copies the same source list and injects preview Kustomize patches only into the source matching `preview.source.path`.
-- Because the lab root app uses server-side diff, generated preview Applications also include a compatibility `spec.source` copied from the first source. Without that, server-side dry-run rejected child Applications with `spec.source.repoURL: Required value`.
-- Argo CD Image Updater patches both `spec.source.kustomize.images` and `spec.sources[0].kustomize.images` on multi-source preview apps. The root app must ignore both paths for resources labeled `preview.sonia.so/enabled=true`.
-- Verified PR #3 after the change: `argocd/web-apps-preview-pr-3` is `Synced` and `Healthy`, the Helm source created `web-preview-pr-3/web-helm-addon`, the Deployment still uses the PR image, and root returned to `Synced` and `Healthy`.
+- The code repository builds PR images in GHCR.
+- Preview tags use the PR number and short commit suffix pattern.
+- Argo CD Image Updater is used in `argocd` write-back mode for preview apps.
+- Preview patches switch Image Updater away from Git write-back so it updates
+  the generated Argo CD Application instead of mutating tenant Git.
+- Root ignore rules are required for preview Applications labeled
+  `preview.sonia.so/enabled=true` so Image Updater-owned fields do not create
+  Argo CD drift.
+
+Open item:
+
+- Make private GHCR package visibility and pull-secret behavior fully
+  production-realistic. The lab has a pull secret path, but GHCR package
+  visibility still needs a final private-package rehearsal.
+
+## Secrets
+
+Verified patterns:
+
+- Shared secret path: ESO creates a Secret in the stable tenant namespace, and
+  mittwald/kubernetes-replicator copies it into preview namespaces.
+- Generated secret path: the controller/platform can generate an `ExternalSecret`
+  directly in the preview namespace.
+- Pull secrets can follow the same replicated/imported secret pattern.
+
+Current host-namespace implementation does not need vCluster
+`sync.fromHost.secrets`.
+
+## Gateway API
+
+Verified:
+
+- Preview `HTTPRoute` hostnames can be patched per PR.
+- KGateway exposes preview apps through generated hostnames such as
+  `web-pr-3.sonia-certs.uk`.
+
+Open item:
+
+- Gateway API policy resources still need a dedicated test.
+
+## Dependencies
+
+Verified in the lab:
+
+- Redis operator dependency worked with host-side operator ownership.
+- RabbitMQ operator dependency worked with host-side operator ownership during
+  the vCluster dependency rehearsal.
+- S3 Mountpoint CSI worked with host-side static PV ownership.
+- S3 PVCs are currently part of the realistic web base/preview flow.
+
+Current recommendation:
+
+- Keep platform dependencies host-side and platform-owned.
+- Tenant preview apps should consume generated Secrets, Services, PVCs, and
+  normal namespaced resources.
+- Do not let tenant preview apps create broad operator or cluster-scoped
+  platform resources until RBAC, quota, cleanup, and CRD behavior are tested per
+  dependency.
+
+Open items:
+
+- CNPG/database preview mode is not installed or tested.
+- RabbitMQ in the current host-namespace flow should be re-tested after the
+  vCluster path was retired.
+- Redis/S3 are tested enough for this lab, but lifecycle and quota policies still
+  need production design.
+
+## Observability
+
+Open items:
+
+- Metrics scraping for preview workloads is not implemented yet.
+- Likely pattern: controller-generated `VMServiceScrape` or `VMPodScrape` in
+  the preview namespace with strict labels.
+- Grafana dashboard resources are not implemented yet.
+- Keep `GrafanaDashboard` host-side/platform-owned unless tenant dashboard CRDs
+  are explicitly allowlisted.
+- OpenTelemetry instrumentation preview mode is not implemented yet.
+
+## RBAC And Tenancy
+
+Verified:
+
+- Preview apps use a dedicated Argo CD project.
+- Generated preview resources are isolated by namespace.
+- The controller is allowlisted to the lab repositories only.
+- The controller writes GitOps state and does not require broad Kubernetes RBAC
+  for preview workload creation.
+
+Open items:
+
+- Production quota and LimitRange policy for preview namespaces.
+- NetworkPolicy defaults for preview namespaces.
+- AppProject destination and resource allowlist hardening.
+- Explicit deny/allow behavior for cluster-scoped resources in preview apps.
+- User-facing status and failure reporting.
+
+## vCluster Findings
+
+vCluster was useful for understanding the isolation boundary, but the current
+implementation intentionally moved back to plain host namespaces first.
+
+Concrete findings from the vCluster experiment:
+
+- Every workload Pod inside a vCluster becomes a real host-cluster Pod.
+- vCluster added complexity around secrets, operators, Gateway API, metrics,
+  CSI, and Argo CD visibility.
+- OSS vCluster can work, but several convenient integrations are Pro-only.
+- Host-side ownership of platform dependencies was still the cleanest boundary.
+- Argo CD hit trouble caching some vCluster workload objects during the lab.
+
+Current decision:
+
+- Do not use vCluster for the first production-like iteration.
+- Revisit vCluster only if namespace-level isolation is not enough.
+
+## Remaining Todo List
+
+- GitHub webhooks instead of polling.
+- Controller status reporting back to GitHub PRs.
+- Controller Prometheus metrics.
+- User-facing events or comments explaining preview creation failures.
+- Multi-app PR behavior, where one code PR creates multiple preview apps.
+- Private GHCR package visibility test.
+- Gateway API policy resources.
+- Metrics scraping.
+- Grafana dashboards.
+- OpenTelemetry instrumentation.
+- CNPG/database mode.
+- Current host-namespace RabbitMQ rehearsal.
+- Production RBAC, ResourceQuota, LimitRange, and NetworkPolicy defaults.
+- Documentation/examples for `PreviewEnvironment` source index rules.
