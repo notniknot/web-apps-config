@@ -1,5 +1,5 @@
 apiVersion: preview.sonia.so/v1alpha1
-kind: PreviewEnvironment
+kind: PreviewTemplate
 metadata:
   name: web-playground
 spec:
@@ -7,13 +7,6 @@ spec:
   configRepository: notniknot/web-apps-config
   application:
     path: web-playground.argocd.yaml
-  pullRequests:
-    code:
-      configPRField: Preview-Config-PR
-      configPRCommand: /preview config-pr
-    config:
-      codePRField: Preview-Code-PR
-      codePRCommand: /preview code-pr
   sourcePolicy: include-all
   sources:
     - index: 0

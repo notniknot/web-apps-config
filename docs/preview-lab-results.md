@@ -1,6 +1,6 @@
 # Preview Environment Lab Results
 
-Last updated: 2026-07-03.
+Last updated: 2026-07-04.
 
 This document records the lab result for self-service preview environments using
 `notniknot/web-apps`, `notniknot/web-apps-config`, `notniknot/argocd`, and
@@ -8,14 +8,34 @@ This document records the lab result for self-service preview environments using
 
 ## Current Direction
 
-- Use normal host-cluster namespaces for preview environments first.
-- Do not use vCluster in the current implementation path.
-- Let Argo CD deploy generated preview `Application` resources into dedicated
-  namespaces such as `web-preview-pr-3`.
+- Use normal host-cluster namespaces for preview environments. Do not use
+  vCluster in the current implementation path.
+- Drive previews entirely from Kubernetes CRs. The old GitHub PR
+  label/comment/PR-body-link trigger has been removed; it is not kept as a
+  fallback.
+- Developers request previews from inside Argo CD:
+  - an Argo CD **UI extension** collects the request,
+  - a thin Argo CD **proxy-extension backend** creates a
+    `PreviewEnvironmentRequest` CR,
+  - the **preview controller** reconciles the request into a resolved
+    `PreviewEnvironment` CR and generated GitOps state,
+  - Argo CD syncs the generated preview `Application` and platform resources,
+  - status conditions on both CRs feed the UI.
+- GitHub is still used by the controller, but only to resolve requested PRs to
+  immutable SHAs, inspect PR metadata, and read/write GitOps files. GitHub is no
+  longer an event source.
 - Keep platform-owned resources in the host cluster and generated through GitOps.
 - Keep tenant-owned preview configuration inside the tenant config repository.
-- Use the controller as the automation layer that reacts to GitHub PR labels and
-  writes generated GitOps resources.
+
+```text
+Argo CD UI extension
+  -> thin Go proxy-extension backend
+    -> PreviewEnvironmentRequest CR (user intent, namespaced)
+      -> preview-controller (controller-runtime operator)
+        -> PreviewEnvironment CR (resolved, controller-owned)
+        -> generated Argo CD Application + platform resources in notniknot/argocd
+        -> status, URLs, cleanup
+```
 
 ## Repository Contract
 
@@ -23,43 +43,40 @@ This document records the lab result for self-service preview environments using
 - Tenant config repository: `notniknot/web-apps-config`.
 - Root/Argo CD config repository: `notniknot/argocd`.
 - Controller repository: `notniknot/preview-controller`.
-- Preview label: `preview/playground`.
-- App-local preview contract: `apps/web/preview.yaml`.
+- App-local preview template: `apps/web/preview.yaml` (`kind: PreviewTemplate`).
 - App-local preview components: `apps/web/previews/components`.
 - App-local preview patches: `apps/web/previews/patches`.
 - Stable app structure: `apps/<app>/base`, `apps/<app>/<env>`, and
   `apps/<app>/<app>-<env>.argocd.yaml`.
-- Preview namespace pattern: `<tenant>-preview-pr-<number>`.
-- Preview Argo CD application pattern: `<app>-apps-preview-pr-<number>`.
-- Config-only preview namespace pattern:
-  `<tenant>-preview-config-pr-<number>`.
-- Config-only preview Argo CD application pattern:
-  `<app>-apps-preview-config-pr-<number>`.
-- Explicit code+config preview namespace pattern:
-  `<tenant>-preview-pr-<code-pr>-config-pr-<config-pr>`.
-- Explicit code+config preview Argo CD application pattern:
-  `<app>-apps-preview-pr-<code-pr>-config-pr-<config-pr>`.
+- Preview identity (`{{.PreviewID}}`), stable and collision-safe:
+  - code PR preview: `pr-123`
+  - config-only preview: `config-pr-42`
+  - code+config preview: `pr-123-config-pr-42`
+  - multi-code+config: `pr-123-pr-124-config-pr-42` (code PRs sorted)
+  - an optional request `variant` is appended: `pr-123-review2`
+- Preview namespace pattern: `<tenant>-preview-<previewID>`.
+- Preview Argo CD application pattern: `<app>-apps-preview-<previewID>`.
+- Preview hostname pattern: `web-<previewID>.sonia-certs.uk`.
 
-## PreviewEnvironment Contract
+## CRD Model
 
-`apps/web/preview.yaml` is now a CRD-shaped document:
+Three kinds, all group `preview.sonia.so/v1alpha1`.
+
+### PreviewTemplate (tenant-owned, Git document)
+
+`apps/web/preview.yaml` is the app-local template. It is read from the config
+repository by the controller; it is not created in the cluster during normal
+workflows.
 
 ```yaml
 apiVersion: preview.sonia.so/v1alpha1
-kind: PreviewEnvironment
+kind: PreviewTemplate
 metadata:
   name: web-playground
 spec:
   configRepository: notniknot/web-apps-config
   application:
     path: web-playground.argocd.yaml
-  pullRequests:
-    code:
-      configPRField: Preview-Config-PR
-      configPRCommand: /preview config-pr
-    config:
-      codePRField: Preview-Code-PR
-      codePRCommand: /preview code-pr
   sourcePolicy: include-all
   sources:
     - index: 0
@@ -81,228 +98,231 @@ spec:
   values:
     hostname: web-{{.PreviewID}}.sonia-certs.uk
     imageTagPrefix: preview-{{.PreviewID}}-
+  secrets:
+    import:
+      - ghcr-pull-secret
+    generated:
+      - generated-preview-secret
 ```
 
 Notes:
 
-- `configRepository` uses the full GitHub name, for example
-  `notniknot/web-apps-config`.
-- `app` and `tenant` are intentionally not part of the tenant-owned
-  `PreviewEnvironment` spec.
-- `app` and `tenant` remain in the controller allowlist because they are identity
-  and authorization inputs used for names, namespaces, labels, and template data.
-- `application.path` points to the existing Argo CD Application YAML in the
+- The template no longer carries a `pullRequests` block. PR linkage is now
+  explicit request intent, not PR-body parsing.
+- `application.path` points to the existing Argo CD `Application` YAML in the
   tenant config repository.
-- `pullRequests` defines the PR body fields/commands the controller uses to link
-  code PRs and config PRs.
 - `sources[*].index` maps to `spec.sources[index]` of that Argo CD Application.
-- Kustomize patches can be inline or loaded from files under
-  `apps/<app>/previews/patches`.
-- Helm sources can receive extra `valueFiles` and inline `valuesObject`.
-- `$values/...` Helm value file references can be supported through `valueRefs`.
-- `{{.PreviewID}}` is stable and collision-safe:
-  - code PR preview: `pr-123`
-  - config-only PR preview: `config-pr-42`
-  - linked code+config preview: `pr-123-config-pr-42`
-- `{{.PR}}` remains available for compatibility and is the owner PR number.
+- Template values are rendered with `{{.PreviewID}}`, `{{.PR}}` (owner PR),
+  `{{.CodePRs}}`, `{{.ConfigPR}}`, and `{{.Values.*}}`.
 
-## Code And Config PR Workflows
+### PreviewEnvironmentRequest (user intent)
 
-### Code PR Only
+Namespace-scoped, RBAC-controlled, created by the proxy backend.
 
-Workflow:
+```yaml
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewEnvironmentRequest
+metadata:
+  name: web-pr-123
+  namespace: web
+spec:
+  application:
+    configRepository: notniknot/web-apps-config
+    path: apps/web
+    cluster: playground
+  sources:
+    config:
+      pullRequest: 4
+    code:
+      - repository: notniknot/web-apps
+        pullRequest: 123
+      - repository: notniknot/worker
+        pullRequest: 77
+  ttl: 8h
+  reason: review checkout flow
+  variant: ""            # optional: a second preview for the same PR combination
+```
 
-1. Developer opens a PR in `notniknot/web-apps`.
-2. CI builds an image with a preview tag such as `preview-pr-123-<sha>`.
-3. Developer adds `preview/playground`.
-4. The controller creates preview identity `pr-123`.
-5. Generated resources use names such as:
-   - namespace `web-preview-pr-123`
-   - Argo CD app `web-apps-preview-pr-123`
-   - hostname `web-pr-123.sonia-certs.uk`
-6. Tenant config is read from `main`.
-7. Image Updater can select the matching PR image.
+The preview shape is derived from which sources are set:
 
-Cleanup:
+- config only: `sources.config`
+- code only: one `sources.code[]`
+- code + config: one `sources.code[]` and `sources.config`
+- multiple code + config: several `sources.code[]` and one `sources.config`
 
-- Removing the label or closing the code PR removes the generated preview.
+### PreviewEnvironment (resolved, controller-owned)
 
-### Code PR With Config PR
+```yaml
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewEnvironment
+metadata:
+  name: pr-123-config-pr-4
+  namespace: web
+spec:
+  previewID: pr-123-config-pr-4
+  tenant: web
+  app: web
+  environment: playground
+  cluster: playground
+  project: web-preview
+  configRepository: notniknot/web-apps-config
+  argoRepository: notniknot/argocd
+  requestRef: web-pr-123
+  resolvedSources:
+    config: { repository: notniknot/web-apps-config, pullRequest: 4, sha: <sha> }
+    code:
+      - { repository: notniknot/web-apps, pullRequest: 123, sha: <sha> }
+status:
+  phase: Ready
+  namespace: web-preview-pr-123-config-pr-4
+  applicationName: web-apps-preview-pr-123-config-pr-4
+  hostnames: [ web-pr-123-config-pr-4.sonia-certs.uk ]
+  urls: [ https://web-pr-123-config-pr-4.sonia-certs.uk ]
+  generatedFiles: [ ... ]
+  conditions:
+    - type: Ready
+      status: "True"
+      reason: Rendered
+```
 
-Workflow:
-
-1. Developer opens a PR in `notniknot/web-apps`.
-2. Developer opens a PR in `notniknot/web-apps-config`.
-3. The code PR can link the config PR with one of:
-   - `Preview-Config-PR: 42`
-   - `/preview config-pr 42`
-4. The controller creates preview identity
-   `pr-<code-pr>-config-pr-<config-pr>`.
-5. The generated Argo CD Application uses separate namespace, hostname, and app
-   name from the code-only preview.
-6. Config repository sources are rewritten to the config PR head SHA.
-7. Config-only preview `config-pr-42` is not created.
-8. Multiple config PRs can point at the same code PR and each receives its own
-   environment.
-
-Cleanup:
-
-- Removing the code PR label cleans code-body-triggered linked environments.
-- Removing the config PR label cleans config-body-triggered linked environments.
-- Closing either PR removes the linked environment.
-
-### Config PR Only
-
-Workflow:
-
-1. Developer opens a PR in `notniknot/web-apps-config`.
-2. Developer adds `preview/playground` to the config PR.
-3. The controller creates preview identity `config-pr-<config-pr>`.
-4. Generated resources use names such as:
-   - namespace `web-preview-config-pr-42`
-   - Argo CD app `web-apps-preview-config-pr-42`
-   - hostname `web-config-pr-42.sonia-certs.uk`
-5. Config repository sources are rewritten to the config PR head SHA.
-6. The app uses the image resolved by the config branch/default app config.
-
-Cleanup:
-
-- Removing the label or closing the config PR removes the generated preview.
-
-### Config PR Attached After Code Preview Exists
-
-Workflow:
-
-1. Developer first creates a code PR preview, for example `pr-123`.
-2. Later, developer opens a config PR.
-3. The config PR links back to the code PR with one of:
-   - `Preview-Code-PR: 123`
-   - `/preview code-pr 123`
-4. The controller creates `pr-123-config-pr-42` as a separate linked preview.
-5. No config-only preview is created.
-
-Cleanup:
-
-- If the config PR label is removed, the linked preview is removed.
-- If the code PR still carries the preview label and no linked config preview is
-  active, the code-only preview can exist as `pr-123`.
-
-### Multiple Linked Preview Variants
-
-Workflow:
-
-1. Two config PRs can both link to one code PR:
-   - config PR `42`: `Preview-Code-PR: 123`
-   - config PR `43`: `Preview-Code-PR: 123`
-2. The controller creates:
-   - `pr-123-config-pr-42`
-   - `pr-123-config-pr-43`
-3. One config PR can also link to multiple code PRs by repeating the body field:
-   - `Preview-Code-PR: 123`
-   - `Preview-Code-PR: 124`
-4. Multiple code PRs can link to the same config PR with:
-   - `Preview-Config-PR: 42`
-5. Each code/config pair receives a dedicated namespace, hostname, and Argo CD
-   Application.
+Users normally create `PreviewEnvironmentRequest`, not `PreviewEnvironment`
+directly. Direct creation remains an admin/debug path.
 
 ## Controller Behavior
 
-- The controller polls allowlisted GitHub repositories.
-- For an open PR with `preview/playground`, it reads the app-local
-  `PreviewEnvironment` contract from the tenant config repository.
-- It renders a generated Argo CD `Application` into `notniknot/argocd`.
-- It renders host-side platform resources such as namespace and generated
-  `ExternalSecret` manifests into `notniknot/argocd`.
-- It updates the preview-platform kustomization to include generated platform
-  files.
-- For a PR without the label, or a closed PR, it removes generated tenant and
-  platform files.
-- It watches both the code repository and the tenant config repository.
-- A config PR can either create a config-only preview or attach to an open code
-  PR.
-- A code PR can explicitly select a config PR.
-- Explicit code/config pairings use composite preview IDs, so variants do not
-  overwrite each other.
-- PR link fields and slash-style commands are loaded from `spec.pullRequests` in
-  the main-branch preview config, with the documented defaults as fallback.
-- Cleanup is idempotent: later polls do not create additional Git commits after
-  the generated state is gone.
-- Info logs are emitted only when Git state actually changes. Steady-state
-  no-op reconcile/cleanup messages are debug-level.
+For each `PreviewEnvironmentRequest` the controller:
 
-The controller currently uses polling. GitHub webhooks remain a future
-improvement.
+1. Resolves `spec.application` to an allowlisted application binding.
+2. Authorizes the request namespace and every requested code repository against
+   the allowlist. Config source repository must match the binding.
+3. Resolves each config/code PR to an immutable head SHA. A missing or
+   non-open PR is denied with an actionable status.
+4. Reads and validates the `PreviewTemplate` at the config PR SHA (or the base
+   branch for code-only/no-config requests). A missing/invalid template is
+   denied with status.
+5. Computes the stable `previewID` (with optional `variant`).
+6. Creates/updates the resolved `PreviewEnvironment`, guarding the shared
+   identity: if the preview ID is already owned by another request, the second
+   request is denied and told to set a distinct `variant`.
+7. Renders the generated Argo CD `Application` and host-side platform resources
+   (namespace and generated `ExternalSecret`s) into `notniknot/argocd`, and adds
+   the generated platform file to the preview-platform kustomization.
+8. Writes status conditions on both CRs.
 
-## Verified Use Cases
+For deletion/cancel (finalizer-driven, idempotent) the controller removes the
+generated tenant Application file, the generated platform file, the platform
+kustomization entry, and the owned `PreviewEnvironment`. Cleanup only touches
+files owned by that request's preview identity.
 
-- Repository bootstrap is working.
-- Tenant app-of-apps is working.
-- Stable `web/web` app in the parent cluster is working.
-- `PreviewEnvironment` CRD is installed in the lab cluster.
-- Preview controller is built and pushed as
-  `ghcr.io/notniknot/preview-controller:latest`.
-- Controller deployment in `preview-controller` namespace is healthy.
-- PR label detection works for `preview/playground`.
-- Generated preview Argo CD apps were created for PRs `1` and `3`.
-- Generated preview apps reached `Synced` and `Healthy`.
-- Dedicated preview namespaces were created for PRs `1` and `3`.
-- Removing the label from PRs `1` and `3` cleaned up:
-  - generated tenant Argo CD Application files
-  - generated preview-platform files
-  - generated Argo CD Application objects
-  - preview namespaces `web-preview-pr-1` and `web-preview-pr-3`
-- Root, preview-platform, and tenant app-of-apps returned to `Synced` and
-  `Healthy`.
-- Controller log-noise fix was deployed and verified: with no active preview
-  labels, logs stayed quiet across an idle poll interval.
-- Unit tests now cover:
-  - code PR only
-  - code PR explicitly linked to a config PR
-  - config-only PR
-  - config PR attached after a code preview already exists
-  - config PR as the trigger for an open code PR
-  - multiple config PRs attached to the same code PR
-  - one config PR attached to multiple code PRs
-  - multiple code PRs selecting the same config PR
-  - custom PR link field/command names from `spec.pullRequests`
-  - missing linked config PR fallback to `main`
-  - config PR linked to a missing code PR
-  - cleanup for composite code+config preview identities
-  - cleanup for code-owned and config-owned previews
-  - idempotent cleanup
+The controller reconciles on CR change and requeues on an interval so it picks
+up new commits on a still-open PR. Status is machine-readable (condition
+`Ready` with reasons such as `InvalidRepository`, `PullRequestNotFound`,
+`TemplateNotFound`, `Unauthorized`, `PreviewIdentityConflict`, `Rendered`) so the
+UI can show actionable errors.
+
+## Request Workflows
+
+### Config-only preview
+
+Request sets only `sources.config`. Preview identity `config-pr-<n>`. Tenant
+config sources are rewritten to the config PR head SHA.
+
+### Code-only preview
+
+Request sets one `sources.code[]`. Preview identity `pr-<n>`. Tenant config is
+read from the base branch; the code PR selects the preview image via the
+`imageTagPrefix` value and Argo CD Image Updater.
+
+### Code + config preview
+
+Request sets one `sources.code[]` and `sources.config`. Preview identity
+`pr-<code>-config-pr-<config>`. Separate namespace, hostname, and app name from
+either the code-only or config-only preview.
+
+### Multiple code repos + one config preview
+
+Request sets several `sources.code[]` and one `sources.config`. This is a single
+combined preview `pr-<a>-pr-<b>-config-pr-<c>` (code PRs sorted), with all code
+PR SHAs recorded in the resolved environment.
+
+### Multiple previews for the same PR combination
+
+Two requests may reference the same PRs as long as they use different `variant`
+values (or names that resolve to different preview IDs). Each owns its own
+environment and cleans up independently.
+
+## Self-Service UX
+
+### Argo CD UI extension
+
+A vanilla-JS Argo CD UI extension (`ui-extension/`, following the
+`argocd-drift-detector-extension` pattern) registers a system-level "Previews"
+view. It lets the user select a preview-capable application, choose the preview
+shape, enter PR numbers/repos, set optional TTL/reason/variant, submit the
+request, and list existing previews with status, URLs, Argo CD app name, resolved
+refs/SHAs, and errors, plus a delete/close action. The UI is client-side only.
+
+### Proxy-extension backend
+
+A thin Go proxy-extension backend (`cmd/preview-backend`) receives the browser
+requests forwarded by `argocd-server`. It:
+
+- lists preview-capable applications/templates for the user's app context,
+- creates `PreviewEnvironmentRequest` CRs,
+- lists requests/environments visible to the user,
+- deletes/cancels requests.
+
+It does not render manifests, mutate tenant config repositories, create Argo CD
+Applications directly, or duplicate controller reconciliation logic.
+
+### RBAC boundary
+
+- Endpoints are app-scoped. The backend validates the Argo CD identity headers
+  (`Argocd-Application-Name`, `Argocd-Project-Name`) that `argocd-server`
+  forwards after authenticating the user and enforcing the `extensions` RBAC.
+- The backend acts with its own least-privilege ServiceAccount, granted only
+  create/list/delete of the request CRs in the tenant request namespace. It is
+  not a privilege-escalation path.
+- The controller holds the elevated GitHub/GitOps credentials, but every request
+  still passes explicit allowlist, namespace, and ownership checks.
+
+## Namespace Cleanup
+
+Namespaces created only by Argo CD `CreateNamespace=true` are not pruned when the
+preview app is removed. The controller therefore renders the preview namespace as
+a **generated platform resource** in the preview-platform kustomization, which is
+synced by a pruning `preview-platform` Application. Removing the generated
+platform file on cleanup prunes the namespace.
 
 ## Multi-Source Argo CD Applications
 
-The lab app uses `spec.sources`.
+The lab app uses `spec.sources`. The controller copies the source list from the
+referenced Argo CD Application and mutates sources by index:
 
-The preview controller copies the source list from the referenced Argo CD
-Application and mutates sources by index:
-
-- `sourcePolicy: include-all` keeps all sources unless a source rule says
-  `action: drop`.
+- `sourcePolicy: include-all` keeps all sources unless a rule says `action: drop`.
 - `sourcePolicy: include-listed` keeps only explicitly listed source indexes.
-- Kustomize mutations are applied only to selected Kustomize sources.
-- Helm mutations are applied only to selected Helm sources.
-- The generated preview Application still emits a compatibility `spec.source`
-  copied from the first source because the root app uses server-side dry-run and
+- Kustomize mutations apply only to selected Kustomize sources; Helm mutations
+  only to selected Helm sources.
+- The generated preview Application emits a compatibility `spec.source` copied
+  from the first source, because the root app uses server-side dry-run and
   rejected child Applications when `spec.source.repoURL` was absent.
 
 ## Image Updates
 
-- The code repository builds PR images in GHCR.
-- Preview tags use the PR number and short commit suffix pattern.
-- Argo CD Image Updater is used in `argocd` write-back mode for preview apps.
-- Preview patches switch Image Updater away from Git write-back so it updates
-  the generated Argo CD Application instead of mutating tenant Git.
+- The code repository builds PR images in GHCR with tags like
+  `preview-pr-<n>-<sha>`.
+- Argo CD Image Updater runs in `argocd` write-back mode for preview apps.
+- Preview patches switch Image Updater away from Git write-back so it updates the
+  generated Argo CD Application instead of mutating tenant Git, and constrain
+  `allowTags` to the request's `imageTagPrefix`.
 - Root ignore rules are required for preview Applications labeled
   `preview.sonia.so/enabled=true` so Image Updater-owned fields do not create
-  Argo CD drift.
+  drift.
 
 Open item:
 
 - Make private GHCR package visibility and pull-secret behavior fully
-  production-realistic. The lab has a pull secret path, but GHCR package
-  visibility still needs a final private-package rehearsal.
+  production-realistic.
 
 ## Secrets
 
@@ -310,18 +330,15 @@ Verified patterns:
 
 - Shared secret path: ESO creates a Secret in the stable tenant namespace, and
   mittwald/kubernetes-replicator copies it into preview namespaces.
-- Generated secret path: the controller/platform can generate an `ExternalSecret`
+- Generated secret path: the controller/platform generates an `ExternalSecret`
   directly in the preview namespace.
 - Pull secrets can follow the same replicated/imported secret pattern.
-
-Current host-namespace implementation does not need vCluster
-`sync.fromHost.secrets`.
 
 ## Gateway API
 
 Verified:
 
-- Preview `HTTPRoute` hostnames can be patched per PR.
+- Preview `HTTPRoute` hostnames can be patched per preview.
 - KGateway exposes preview apps through generated hostnames such as
   `web-pr-3.sonia-certs.uk`.
 
@@ -331,19 +348,14 @@ Open item:
 
 ## Dependencies
 
-Verified in the lab:
-
-- Redis operator dependency worked with host-side operator ownership.
-- RabbitMQ operator dependency worked with host-side operator ownership during
-  the vCluster dependency rehearsal.
-- S3 Mountpoint CSI worked with host-side static PV ownership.
-- S3 PVCs are currently part of the realistic web base/preview flow.
+Verified in the lab: Redis operator, RabbitMQ operator (during the vCluster
+rehearsal), and S3 Mountpoint CSI all worked with host-side platform ownership.
 
 Current recommendation:
 
 - Keep platform dependencies host-side and platform-owned.
-- Tenant preview apps should consume generated Secrets, Services, PVCs, and
-  normal namespaced resources.
+- Tenant preview apps consume generated Secrets, Services, PVCs, and normal
+  namespaced resources.
 - Do not let tenant preview apps create broad operator or cluster-scoped
   platform resources until RBAC, quota, cleanup, and CRD behavior are tested per
   dependency.
@@ -351,22 +363,8 @@ Current recommendation:
 Open items:
 
 - CNPG/database preview mode is not installed or tested.
-- RabbitMQ in the current host-namespace flow should be re-tested after the
-  vCluster path was retired.
-- Redis/S3 are tested enough for this lab, but lifecycle and quota policies still
-  need production design.
-
-## Observability
-
-Open items:
-
-- Metrics scraping for preview workloads is not implemented yet.
-- Likely pattern: controller-generated `VMServiceScrape` or `VMPodScrape` in
-  the preview namespace with strict labels.
-- Grafana dashboard resources are not implemented yet.
-- Keep `GrafanaDashboard` host-side/platform-owned unless tenant dashboard CRDs
-  are explicitly allowlisted.
-- OpenTelemetry instrumentation preview mode is not implemented yet.
+- RabbitMQ should be re-tested in the current host-namespace flow.
+- Redis/S3 lifecycle and quota policies still need production design.
 
 ## RBAC And Tenancy
 
@@ -374,52 +372,60 @@ Verified:
 
 - Preview apps use a dedicated Argo CD project.
 - Generated preview resources are isolated by namespace.
-- The controller is allowlisted to the lab repositories only.
-- The controller writes GitOps state and does not require broad Kubernetes RBAC
-  for preview workload creation.
+- The controller is allowlisted to the lab repositories only and writes GitOps
+  state rather than requiring broad Kubernetes RBAC for workload creation.
+- The proxy backend honors Argo CD identity and is namespace-scoped by RBAC.
 
 Open items:
 
 - Production quota and LimitRange policy for preview namespaces.
 - NetworkPolicy defaults for preview namespaces.
 - AppProject destination and resource allowlist hardening.
-- Explicit deny/allow behavior for cluster-scoped resources in preview apps.
-- User-facing status and failure reporting.
 
 ## vCluster Findings
 
-vCluster was useful for understanding the isolation boundary, but the current
-implementation intentionally moved back to plain host namespaces first.
+vCluster clarified the isolation boundary, but the current implementation moved
+back to plain host namespaces. Host-side ownership of platform dependencies was
+the cleanest boundary, several convenient vCluster integrations are Pro-only, and
+Argo CD had trouble caching some vCluster workload objects. Revisit vCluster only
+if namespace-level isolation proves insufficient.
 
-Concrete findings from the vCluster experiment:
+## Verified Use Cases
 
-- Every workload Pod inside a vCluster becomes a real host-cluster Pod.
-- vCluster added complexity around secrets, operators, Gateway API, metrics,
-  CSI, and Argo CD visibility.
-- OSS vCluster can work, but several convenient integrations are Pro-only.
-- Host-side ownership of platform dependencies was still the cleanest boundary.
-- Argo CD hit trouble caching some vCluster workload objects during the lab.
-
-Current decision:
-
-- Do not use vCluster for the first production-like iteration.
-- Revisit vCluster only if namespace-level isolation is not enough.
+- CRDs installed: `PreviewTemplate`, `PreviewEnvironmentRequest`,
+  `PreviewEnvironment`.
+- Controller unit tests (controller-runtime fake client + fake GitHub) cover:
+  - config-only request
+  - code-only request
+  - code + config request
+  - multiple code repos + one config repo request (single combined preview)
+  - duplicate PR combination with distinct request names/variants
+  - duplicate PR combination without a variant is denied with a conflict status
+  - request deletion cleanup (files, platform kustomization entry, environment)
+  - namespace cleanup via the generated platform resource
+  - invalid code repository denied
+  - missing PR denied with an actionable status
+  - missing preview template denied with an actionable status
+  - unauthorized request namespace denied
+  - idempotent reconcile and idempotent cleanup
+  - source-policy include-listed / drop and value-ref append rendering
+- Backend tests cover header-based authorization (403 on missing/unknown
+  project), disallowed-repository rejection, and create/list/delete round-trips.
+- UI extension registration and helpers pass the bundle smoke test.
 
 ## Remaining Todo List
 
-- GitHub webhooks instead of polling.
-- Controller status reporting back to GitHub PRs.
+- Real-cluster smoke test of the full request -> environment -> GitOps flow for
+  each preview shape after deployment.
+- GitHub webhooks/event push (currently CR reconcile + requeue interval).
+- Controller status write-back to GitHub PRs.
 - Controller Prometheus metrics.
-- User-facing events or comments explaining preview creation failures.
-- Multi-app PR behavior, where one code PR creates multiple preview apps.
-- Real-cluster smoke test for code+config PR coupling after deployment.
-- Real-cluster smoke test for config-only previews after deployment.
+- User-facing events explaining preview creation failures.
+- Multi-app requests, where one request creates multiple preview apps.
 - Private GHCR package visibility test.
 - Gateway API policy resources.
-- Metrics scraping.
-- Grafana dashboards.
-- OpenTelemetry instrumentation.
-- CNPG/database mode.
-- Current host-namespace RabbitMQ rehearsal.
+- Metrics scraping, Grafana dashboards, OpenTelemetry instrumentation.
+- CNPG/database mode; host-namespace RabbitMQ rehearsal.
 - Production RBAC, ResourceQuota, LimitRange, and NetworkPolicy defaults.
-- Documentation/examples for `PreviewEnvironment` source index rules.
+- TTL-based automatic preview expiry (spec field is recorded; enforcement TBD).
+- Documentation/examples for `PreviewTemplate` source index rules.
