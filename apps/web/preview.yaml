@@ -47,6 +47,10 @@ spec:
       helm:
         valuesObject:
           message: preview-{{.PreviewID}}
+    # Source 2 is the raw preview-template directory source on the stable app.
+    # Previews don't need their own template copy, so drop it.
+    - index: 2
+      action: drop
   values:
     hostname: web-{{.PreviewID}}.sonia-certs.uk
     imageTagPrefix: preview-{{.PreviewID}}-
