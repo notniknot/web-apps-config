@@ -20,6 +20,14 @@ spec:
         valueFiles:
           - values.yaml
           - ../values/playground-values.yaml
+    # Apply the preview template as a child of this app so the preview UI can
+    # read (from the live cluster object) which values are overridable. Raw
+    # directory source: the controller still renders from the Git copy.
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      path: apps/web
+      directory:
+        include: preview.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: web

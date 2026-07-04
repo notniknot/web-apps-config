@@ -50,6 +50,12 @@ spec:
   values:
     hostname: web-{{.PreviewID}}.sonia-certs.uk
     imageTagPrefix: preview-{{.PreviewID}}-
+  # Values a preview requester may override from the UI. Everything else is
+  # fixed by this template. imageTagPrefix lets a preview point Argo CD Image
+  # Updater at a specific build (e.g. a PR's images) without renaming the
+  # preview; leaving it blank uses the default above.
+  expose:
+    - imageTagPrefix
   secrets:
     import:
       - ghcr-pull-secret
