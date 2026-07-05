@@ -8,7 +8,7 @@ metadata:
   annotations:
     argocd.argoproj.io/compare-options: ServerSideDiff=true
 spec:
-  project: web-apps-user-managed
+  project: web
   sources:
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main

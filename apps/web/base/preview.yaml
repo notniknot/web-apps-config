@@ -10,46 +10,6 @@ spec:
   path: apps/web
   application:
     path: web-playground.argocd.yaml
-  sourcePolicy: include-all
-  sources:
-    - index: 0
-      action: keep
-      kustomize:
-        components:
-          - ../previews/components
-        patches:
-          - target:
-              group: apps
-              kind: Deployment
-              name: web
-            path: previews/patches/deployment-env.yaml
-          - target:
-              group: gateway.networking.k8s.io
-              kind: HTTPRoute
-              name: web
-            path: previews/patches/httproute-hostname.yaml
-          - target:
-              group: argocd-image-updater.argoproj.io
-              kind: ImageUpdater
-              name: web
-            path: previews/patches/image-updater-preview.yaml
-          - target:
-              kind: ConfigMap
-              name: preview-demo
-            path: previews/patches/preview-demo.yaml
-          - target:
-              kind: PersistentVolume
-              name: web-s3-public
-            path: previews/patches/s3-persistent-volume.yaml
-          - target:
-              kind: PersistentVolumeClaim
-              name: web-s3-public
-            path: previews/patches/s3-persistent-volume-claim.yaml
-    - index: 1
-      action: keep
-      helm:
-        valuesObject:
-          message: preview-{{.PreviewID}}
   values:
     hostname: web-{{.PreviewID}}.sonia-certs.uk
     imageTagPrefix: preview-{{.PreviewID}}-
@@ -63,5 +23,93 @@ spec:
     import:
       - ghcr-pull-secret
       - shared-preview-secret
-    generated:
-      - generated-preview-secret
+  # ── Rendering rules ────────────────────────────────────────────────────────
+  # How the controller mutates the app's sources into a preview. Patches are
+  # inlined (no external files) so the template is self-contained.
+  sourcePolicy: include-all
+  sources:
+    - index: 0
+      action: keep
+      kustomize:
+        components:
+          - ../previews/components
+        patches:
+          - target:
+              group: apps
+              kind: Deployment
+              name: web
+            patchTemplate: |-
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: web
+              spec:
+                template:
+                  spec:
+                    containers:
+                      - name: web
+                        env:
+                          - name: PREVIEW_PR
+                            value: "{{.PR}}"
+          - target:
+              group: gateway.networking.k8s.io
+              kind: HTTPRoute
+              name: web
+            patchTemplate: |-
+              - op: replace
+                path: /spec/hostnames/0
+                value: "{{.Values.hostname}}"
+          - target:
+              group: argocd-image-updater.argoproj.io
+              kind: ImageUpdater
+              name: web
+            patchTemplate: |-
+              - op: replace
+                path: /metadata/name
+                value: web-apps-preview-{{.PreviewID}}
+              - op: replace
+                path: /spec/writeBackConfig/method
+                value: argocd
+              - op: remove
+                path: /spec/writeBackConfig/gitConfig
+              - op: replace
+                path: /spec/applicationRefs/0/namePattern
+                value: web-apps-preview-{{.PreviewID}}
+              - op: replace
+                path: /spec/applicationRefs/0/images/0/commonUpdateSettings/updateStrategy
+                value: newest-build
+              - op: add
+                path: /spec/applicationRefs/0/images/0/commonUpdateSettings/allowTags
+                value: regexp:^{{.Values.imageTagPrefix}}.*
+          - target:
+              kind: ConfigMap
+              name: preview-demo
+            patchTemplate: |-
+              - op: replace
+                path: /data/pr
+                value: "{{.PR}}"
+              - op: replace
+                path: /data/hostname
+                value: "{{.Values.hostname}}"
+          - target:
+              kind: PersistentVolume
+              name: web-s3-public
+            patchTemplate: |-
+              - op: replace
+                path: /metadata/name
+                value: web-{{.PreviewID}}-s3-public
+              - op: replace
+                path: /spec/claimRef/namespace
+                value: {{.HostNamespace}}
+          - target:
+              kind: PersistentVolumeClaim
+              name: web-s3-public
+            patchTemplate: |-
+              - op: replace
+                path: /spec/volumeName
+                value: web-{{.PreviewID}}-s3-public
+    - index: 1
+      action: keep
+      helm:
+        valuesObject:
+          message: preview-{{.PreviewID}}

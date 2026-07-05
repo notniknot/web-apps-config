@@ -1,6 +1,0 @@
-- op: replace
-  path: /data/pr
-  value: "{{.PR}}"
-- op: replace
-  path: /data/hostname
-  value: "{{.Values.hostname}}"
