@@ -48,8 +48,10 @@ spec:
   # then the controller applies value-shaped rewrites only:
   #   - the source whose path is this env's overlay is swapped to overlayPath
   #     (path-matched, never index-matched; no or ambiguous match = deny) and
-  #     receives kustomize.namespace, preview commonLabels, the preview-params
-  #     data patch rendered from `params`, and the template $patch:delete
+  #     receives the preview commonLabels, the preview-params data patch
+  #     rendered from `params`, and the template $patch:delete. No kustomize
+  #     namespace is set: destination.namespace places namespace-less
+  #     resources, and explicit pins (ImageUpdater -> argocd) survive.
   #   - every config-repo source is pinned to the PR head SHA
   #   - sourceOverrides (selector-matched) adjust inherited sources per preview
   # No index rules, no resource patches: structure lives in the overlay and
@@ -67,13 +69,16 @@ spec:
     # (path/chart/repoURL/ref/releaseName), never by position; an override
     # applies to every matching source, empty rendered values inherit, and
     # `action: drop` removes matches (see previews/README.md). Here: the helm
-    # addon should use preview values instead of the env's values in previews.
+    # addon swaps the env's values file for the preview one (which lives next
+    # to the preview kustomization, so a config PR can edit it). The inherited
+    # `ref: values` source is SHA-pinned like every config-repo source, so the
+    # $values files resolve at the PR ref too.
     sourceOverrides:
       - match:
-          path: previews/helm/addon
+          path: helm/addon
         helm:
           valueFiles:
-            - values.yaml
-            - ../values/preview-values.yaml
+            - $values/apps/web/base/addon-values.yaml
+            - $values/apps/web/previews/playground/addon-values.yaml
           valuesObject:
             message: preview-{{.PreviewID}}

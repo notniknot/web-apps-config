@@ -16,14 +16,18 @@ spec:
   sources:
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
-      path: apps/web/staging
-    - repoURL: git@github.com:notniknot/web-apps-config.git
-      targetRevision: main
-      path: apps/web/previews/helm/addon
+      path: apps/web/helm/addon
       helm:
         valueFiles:
-          - values.yaml
-          - ../values/staging-values.yaml
+          - $values/apps/web/base/addon-values.yaml
+          - $values/apps/web/staging/addon-values.yaml
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      ref: values
+    # Source for raw manifests (kustomize)
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      path: apps/web/staging
   destination:
     server: https://kubernetes.default.svc
     namespace: web

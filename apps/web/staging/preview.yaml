@@ -33,10 +33,10 @@ spec:
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
     sourceOverrides:
       - match:
-          path: previews/helm/addon
+          path: helm/addon
         helm:
           valueFiles:
-            - values.yaml
-            - ../values/preview-values.yaml
+            - $values/apps/web/base/addon-values.yaml
+            - $values/apps/web/previews/staging/addon-values.yaml
           valuesObject:
             message: preview-{{.PreviewID}}

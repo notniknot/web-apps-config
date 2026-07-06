@@ -13,7 +13,13 @@ base/                     shared across all clusters (incl. image-updater.yaml)
 previews/component/       minimal shared preview deltas:
                             kustomization.yaml  (static patches, replicas)
                             preview-params.yaml (the platform contract)
-previews/helm/            helm addon + per-env value files (extra source)
+helm/addon/               in-repo helm chart (extra Application source)
+*/addon-values.yaml       helm values live NEXT TO the kustomizations
+                          (base/, playground/, staging/, previews/<env>/),
+                          referenced via $values — same convention as
+                          infra-config apps (e.g. keda). The preview values
+                          sit beside the preview kustomization, so a config
+                          PR edits them like any other preview file.
 ```
 
 Previews layer on the **env overlay**, not raw base, so they inherit every
@@ -50,7 +56,7 @@ controller then applies value-shaped rewrites only:
 |---|---|---|
 | env overlay source → `apps/web/previews/<env>` | **path-matched** swap (never index-matched; no/ambiguous match = deny) | no |
 | pin config-repo sources to the PR head SHA | `targetRevision` rewrite by repoURL match | no |
-| target namespace `web-preview-<id>` | `spec.destination` + `kustomize.namespace` | no |
+| target namespace `web-preview-<id>` | `spec.destination.namespace` only — no `kustomize.namespace`, so explicit pins (ImageUpdater → `argocd`) survive (E2E-verified) | no |
 | preview labels | `kustomize.commonLabels` | no |
 | per-instance values (hostname, configPR, imageAllowTags, …) | one kustomize patch on the **`preview-params` ConfigMap `data`** | no |
 | which values exist + which are user-overridable | template `values` (per-key `default`/`expose`/`description`) | no |
@@ -105,7 +111,6 @@ spec:
       targetRevision: <main | PR head SHA>
       path: apps/web/previews/playground
       kustomize:
-        namespace: web-preview-pr42
         commonLabels: {preview.sonia.so/id: pr42, ...}
         patches:
           - target: {kind: ConfigMap, name: preview-params}
@@ -123,13 +128,19 @@ spec:
               metadata:
                 name: web
     # Inherited unchanged except the ref pin and the selector-matched
-    # sourceOverride (preview helm values):
+    # sourceOverride (preview values file instead of the env's):
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: <main | PR head SHA>
-      path: apps/web/previews/helm/addon
+      path: apps/web/helm/addon
       helm:
-        valueFiles: [values.yaml, ../values/preview-values.yaml]
+        valueFiles:
+          - $values/apps/web/base/addon-values.yaml
+          - $values/apps/web/previews/playground/addon-values.yaml
         valuesObject: {message: preview-pr42}
+    # Inherited ref source; SHA-pinned so $values files resolve at the PR ref:
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: <main | PR head SHA>
+      ref: values
 ```
 
 At sync time the Argo CD repo-server checks out the ref into a scratch dir,
