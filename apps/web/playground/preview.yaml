@@ -64,8 +64,10 @@ spec:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
     # Per-source adjustments to inherited sources, matched by stable selectors
-    # (path or chart), never by position. Here: the helm addon should use
-    # preview values instead of the env's values in previews.
+    # (path/chart/repoURL/ref/releaseName), never by position; an override
+    # applies to every matching source, empty rendered values inherit, and
+    # `action: drop` removes matches (see previews/README.md). Here: the helm
+    # addon should use preview values instead of the env's values in previews.
     sourceOverrides:
       - match:
           path: previews/helm/addon

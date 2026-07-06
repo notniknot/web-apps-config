@@ -56,10 +56,27 @@ controller then applies value-shaped rewrites only:
 | which values exist + which are user-overridable | template `values` (per-key `default`/`expose`/`description`) | no |
 | how values become params keys | template `preview.params` mapping (value-shaped Go templates) | no |
 | drop the env's `PreviewTemplate` from the render | `$patch: delete` appended by the controller | no (platform-owned kind) |
-| per-source preview adjustments (e.g. preview helm values) | template `preview.sourceOverrides`, selector-matched by path/chart | no |
+| per-source preview adjustments (helm values, chart pins, drops) | template `preview.sourceOverrides`, selector-matched | no |
 
 Sources not present in the env's Application don't exist in the preview;
 sources it declares pass through (bounded by the AppProject source allowlist).
+
+### `sourceOverrides` semantics
+
+- **Selectors** match on stable source identity: `path`, `chart`, `repoURL`,
+  `ref`, `releaseName` (`helm.releaseName` — the discriminator when one chart
+  is installed as several releases). Never by position/index.
+- **Set semantics**: an override applies to *every* matching source. One
+  `match: {chart: vector}` bumps all releases of that chart in lockstep; add
+  `releaseName` to the match to target one. (Contrast: the `overlayPath` swap
+  requires *exactly one* match and denies loudly on zero or several.)
+- **Empty means inherit**: an override field that renders to the empty string
+  (e.g. `targetRevision: "{{.Values.chartVersion}}"` with the value unset) is
+  a no-op — the inherited field stays. Templates therefore never duplicate the
+  Application's pins; they only declare what *may* change.
+- **`action: drop`** removes all matching sources from the preview — for
+  sources that must not run twice or cannot be namespace-confined (e.g. a
+  log-shipper DaemonSet release). A drop override carries no other fields.
 
 Everything the platform touches is value-shaped or targets platform-owned
 kinds. The `preview-params.data` content is not controller-hardcoded: the
