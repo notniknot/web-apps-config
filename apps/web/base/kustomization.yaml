@@ -5,10 +5,9 @@ resources:
   - deployment.yaml
   - external-secret.yaml
   - httproute.yaml
+  # Shared across all clusters (only the tracked tag differs per overlay). The
+  # previews overlay adapts it in-branch (writeback method, allowTags).
   - image-updater.yaml
-  # The preview template is applied alongside the app so the preview UI can read
-  # (from the live cluster object) which values are overridable.
-  - preview.yaml
   - redis.yaml
   - s3-persistent-volume.yaml
   - s3-persistent-volume-claim.yaml

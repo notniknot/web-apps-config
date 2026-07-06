@@ -1,0 +1,133 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Preview overlay: the complete definition of what a preview environment
+# deploys, owned by the app team like any other env overlay. The preview
+# controller instantiates it N times by generating an Argo CD Application that
+# points here at the requested config ref (main or a PR head) and injecting
+# only structure-agnostic parameters (see preview-params.yaml). Because this
+# overlay lives in the same commit as base, a branch that restructures base
+# adapts the preview in the same PR — atomically.
+
+resources:
+  - ../base
+  - preview-params.yaml
+  - preview-demo-configmap.yaml
+  - generated-preview-secret.yaml
+  - dependency-verifier-job.yaml
+
+replicas:
+  - name: web
+    count: 1
+
+patches:
+  # Static preview-shape changes (app-owned). The ImageUpdater stays in base —
+  # it is identical across clusters except the tracked tag — and previews adapt
+  # it here: write image updates back to the Argo app (no Git commits) and
+  # follow the newest build matching the preview's tag prefix. Per-instance
+  # values (name, namePattern, allowTags) are filled in by replacements below.
+  - target:
+      group: argocd-image-updater.argoproj.io
+      kind: ImageUpdater
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/writeBackConfig
+        value:
+          method: argocd
+      - op: replace
+        path: /spec/applicationRefs/0/images/0/commonUpdateSettings/updateStrategy
+        value: newest-build
+      - op: add
+        path: /spec/applicationRefs/0/images/0/commonUpdateSettings/allowTags
+        value: set-by-preview-params
+
+replacements:
+  # Fan the per-preview values out from the preview-params contract ConfigMap
+  # to wherever this app needs them. Only this file knows the app's structure.
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.hostname
+    targets:
+      - select:
+          group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: web
+        fieldPaths:
+          - spec.hostnames.0
+      - select:
+          kind: ConfigMap
+          name: preview-demo
+        fieldPaths:
+          - data.hostname
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.pr
+    targets:
+      - select:
+          kind: Deployment
+          name: web
+        fieldPaths:
+          - spec.template.spec.containers.[name=web].env.[name=PREVIEW_PR].value
+      - select:
+          kind: ConfigMap
+          name: preview-demo
+        fieldPaths:
+          - data.pr
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.applicationName
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: web
+        fieldPaths:
+          - metadata.name
+          - spec.applicationRefs.0.namePattern
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.allowTags
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: web
+        fieldPaths:
+          - spec.applicationRefs.0.images.0.commonUpdateSettings.allowTags
+  # The S3 PersistentVolume is cluster-scoped, so each preview needs a unique
+  # name; the PVC binds it explicitly and the claimRef must point back at the
+  # preview namespace. The claimRef.namespace replacement must run before the
+  # rename below — replacements apply in order and select by current name.
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.namespace
+    targets:
+      - select:
+          version: v1
+          kind: PersistentVolume
+          name: web-s3-public
+        fieldPaths:
+          - spec.claimRef.namespace
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.pvName
+    targets:
+      - select:
+          version: v1
+          kind: PersistentVolume
+          name: web-s3-public
+        fieldPaths:
+          - metadata.name
+      - select:
+          version: v1
+          kind: PersistentVolumeClaim
+          name: web-s3-public
+        fieldPaths:
+          - spec.volumeName

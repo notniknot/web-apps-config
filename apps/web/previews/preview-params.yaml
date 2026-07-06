@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: preview-params
+  labels:
+    preview.sonia.so/contract: params
+data:
+  # Per-preview instance parameters. The values below are placeholders for
+  # local `kustomize build`; when the controller instantiates a preview it
+  # overwrites this ConfigMap's data with computed values via a single
+  # kustomize patch on the generated Application. This ConfigMap is the ONLY
+  # resource the platform patches — the replacements in kustomization.yaml
+  # (owned by this app, versioned with the branch) decide where each value
+  # lands, so restructuring resources in a feature branch can never break the
+  # platform's injection.
+  previewId: local
+  pr: "0"
+  hostname: web-local.sonia-certs.uk
+  namespace: web-preview-local
+  applicationName: web-apps-preview-local
+  allowTags: regexp:^preview-local-.*
+  pvName: web-local-s3-public

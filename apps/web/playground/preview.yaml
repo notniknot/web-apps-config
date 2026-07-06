@@ -1,0 +1,50 @@
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: web-playground
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  # The app directory in the config repo. The preview backend derives the
+  # request's application ref from it (app name = last path segment).
+  path: apps/web
+  application:
+    name: web
+
+  # ── Overlay model ──────────────────────────────────────────────────────────
+  # The preview is a normal kustomize overlay owned by this app. The controller
+  # generates the preview Application pointing at `preview.overlayPath` at the
+  # requested config ref and injects only structure-agnostic parameters:
+  #   - kustomize.namespace + preview commonLabels on the generated Application
+  #   - the data of the `preview-params` ConfigMap (the single patch target)
+  # There are no source rules and no resource patches in this template anymore;
+  # everything structural lives in apps/web/previews/ and versions with the
+  # branch being previewed.
+  preview:
+    overlayPath: previews
+    # Additional Application sources for the preview, declared (not derived by
+    # mutating the real Application's source list by index). Per-preview helm
+    # values are injected by the controller as a valuesObject rendered from
+    # `values` — helm values are structure-agnostic, so this stays safe.
+    extraSources:
+      - path: helm/addon
+        helm:
+          valueFiles:
+            - values.yaml
+            - ../values/preview-values.yaml
+          valuesObject:
+            message: preview-{{.PreviewID}}
+
+  values:
+    hostname: web-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix: preview-{{.PreviewID}}-
+  # Values a preview requester may override from the UI. Everything else is
+  # fixed by this template. imageTagPrefix lets a preview point Argo CD Image
+  # Updater at a specific build (e.g. a PR's images) without renaming the
+  # preview; leaving it blank uses the default above.
+  expose:
+    - imageTagPrefix
+  secrets:
+    import:
+      - ghcr-pull-secret
+      - shared-preview-secret

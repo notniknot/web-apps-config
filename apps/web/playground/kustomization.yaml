@@ -3,6 +3,10 @@ kind: Kustomization
 
 resources:
   - ../base
+  # The preview template is applied by the env that hosts previews so the
+  # preview UI can read (from the live cluster object) which values are
+  # overridable. It is not part of base, so previews never re-render it.
+  - preview.yaml
 
 images:
   - name: ghcr.io/notniknot/web-apps
