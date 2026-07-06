@@ -14,6 +14,7 @@ spec:
   path: apps/web
   application:
     name: web
+    path: web-staging.argocd.yaml
 
   values:
     hostname:
@@ -30,8 +31,9 @@ spec:
     params:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
-    extraSources:
-      - path: previews/helm/addon
+    sourceOverrides:
+      - match:
+          path: previews/helm/addon
         helm:
           valueFiles:
             - values.yaml

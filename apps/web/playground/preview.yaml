@@ -20,6 +20,12 @@ spec:
   path: apps/web
   application:
     name: web
+    # The env's Application manifest (app-relative). Its spec.sources are the
+    # preview's sources: read at the config ref, so a PR editing them (chart
+    # bumps, added sources) is reflected in the preview. Everything else in
+    # the manifest (project, destination, sync policy) is ignored — the
+    # controller generates those.
+    path: web-playground.argocd.yaml
 
   # ── Values ─────────────────────────────────────────────────────────────────
   # Named inputs to the params mapping below. `expose: true` makes a value
@@ -37,17 +43,17 @@ spec:
         Tag prefix the preview's Image Updater follows (newest matching build
         wins). Point it at your CI's tag scheme, e.g. pr42-.
 
-  # ── Overlay model ──────────────────────────────────────────────────────────
-  # The preview is a normal kustomize overlay owned by this app: the rendered
-  # env overlay plus the shared preview component. The controller generates the
-  # preview Application pointing at `preview.overlayPath` at the requested
-  # config ref and injects only structure-agnostic parameters:
-  #   - kustomize.namespace + preview commonLabels on the generated Application
-  #   - the data of the `preview-params` ConfigMap, rendered from `params`
-  #   - the $patch:delete for this template (see header)
-  # There are no source rules and no resource patches in this template;
-  # everything structural lives in apps/web/previews/ and versions with the
-  # branch being previewed.
+  # ── Preview definition ─────────────────────────────────────────────────────
+  # The preview Application inherits spec.sources from application.path above,
+  # then the controller applies value-shaped rewrites only:
+  #   - the source whose path is this env's overlay is swapped to overlayPath
+  #     (path-matched, never index-matched; no or ambiguous match = deny) and
+  #     receives kustomize.namespace, preview commonLabels, the preview-params
+  #     data patch rendered from `params`, and the template $patch:delete
+  #   - every config-repo source is pinned to the PR head SHA
+  #   - sourceOverrides (selector-matched) adjust inherited sources per preview
+  # No index rules, no resource patches: structure lives in the overlay and
+  # versions with the branch being previewed.
   preview:
     overlayPath: previews/playground
     # What the controller writes into preview-params.data. Keys are chosen
@@ -57,12 +63,12 @@ spec:
     params:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
-    # Additional Application sources for the preview, declared (not derived by
-    # mutating the real Application's source list by index). Per-preview helm
-    # values are injected by the controller as a valuesObject — helm values
-    # are structure-agnostic, so this stays safe.
-    extraSources:
-      - path: previews/helm/addon
+    # Per-source adjustments to inherited sources, matched by stable selectors
+    # (path or chart), never by position. Here: the helm addon should use
+    # preview values instead of the env's values in previews.
+    sourceOverrides:
+      - match:
+          path: previews/helm/addon
         helm:
           valueFiles:
             - values.yaml
