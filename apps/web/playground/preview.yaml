@@ -21,23 +21,46 @@ spec:
   application:
     name: web
 
+  # ── Values ─────────────────────────────────────────────────────────────────
+  # Named inputs to the params mapping below. `expose: true` makes a value
+  # user-overridable from the preview UI (overrides are charset-guarded and
+  # never re-templated); everything else is fixed by this template.
+  values:
+    hostname:
+      # Also surfaced by the controller as the preview URL in the UI
+      # (well-known key). Not exposed: uniqueness comes from PreviewID.
+      default: web-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix:
+      default: preview-{{.PreviewID}}-
+      expose: true
+      description: >-
+        Tag prefix the preview's Image Updater follows (newest matching build
+        wins). Point it at your CI's tag scheme, e.g. pr42-.
+
   # ── Overlay model ──────────────────────────────────────────────────────────
   # The preview is a normal kustomize overlay owned by this app: the rendered
   # env overlay plus the shared preview component. The controller generates the
   # preview Application pointing at `preview.overlayPath` at the requested
   # config ref and injects only structure-agnostic parameters:
   #   - kustomize.namespace + preview commonLabels on the generated Application
-  #   - the data of the `preview-params` ConfigMap (the single patch target)
+  #   - the data of the `preview-params` ConfigMap, rendered from `params`
   #   - the $patch:delete for this template (see header)
   # There are no source rules and no resource patches in this template;
   # everything structural lives in apps/web/previews/ and versions with the
   # branch being previewed.
   preview:
     overlayPath: previews/playground
+    # What the controller writes into preview-params.data. Keys are chosen
+    # here; the replacements in the preview overlay fan them out. Context
+    # params (previewID, configPR, hostNamespace, applicationName,
+    # persistentVolumeName) are provided by the controller automatically.
+    params:
+      hostname: "{{.Values.hostname}}"
+      imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
     # Additional Application sources for the preview, declared (not derived by
     # mutating the real Application's source list by index). Per-preview helm
-    # values are injected by the controller as a valuesObject rendered from
-    # `values` — helm values are structure-agnostic, so this stays safe.
+    # values are injected by the controller as a valuesObject — helm values
+    # are structure-agnostic, so this stays safe.
     extraSources:
       - path: previews/helm/addon
         helm:
@@ -46,17 +69,3 @@ spec:
             - ../values/preview-values.yaml
           valuesObject:
             message: preview-{{.PreviewID}}
-
-  values:
-    hostname: web-{{.PreviewID}}.sonia-certs.uk
-    imageTagPrefix: preview-{{.PreviewID}}-
-  # Values a preview requester may override from the UI. Everything else is
-  # fixed by this template. imageTagPrefix lets a preview point Argo CD Image
-  # Updater at a specific build (e.g. a PR's images) without renaming the
-  # preview; leaving it blank uses the default above.
-  expose:
-    - imageTagPrefix
-  secrets:
-    import:
-      - ghcr-pull-secret
-      - shared-preview-secret

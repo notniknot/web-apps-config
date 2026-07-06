@@ -48,12 +48,21 @@ For each preview `<id>`, the controller generates an Argo CD `Application`
 | target namespace `web-preview-<id>` | `spec.destination` + `kustomize.namespace` | no |
 | preview labels | `kustomize.commonLabels` | no |
 | per-instance values (hostname, configPR, imageAllowTags, …) | one kustomize patch on the **`preview-params` ConfigMap `data`** | no |
+| which values exist + which are user-overridable | template `values` (per-key `default`/`expose`/`description`) | no |
+| how values become params keys | template `preview.params` mapping (value-shaped Go templates) | no |
 | drop the env's `PreviewTemplate` from the render | `$patch: delete` appended by the controller | no (platform-owned kind) |
 | per-preview helm values (addon source) | `helm.valuesObject` from the template | no |
 
 Everything the platform touches is value-shaped or targets platform-owned
-kinds. The replacements (owned here, versioned with the branch) fan the params
-out to the app's actual resources. If a feature branch renames or restructures
+kinds. The `preview-params.data` content is not controller-hardcoded: the
+template's `preview.params` mapping declares which keys exist and how they
+derive from `values` (e.g. `imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"`),
+on top of the context params the controller always provides (`previewID`,
+`configPR`, `hostNamespace`, `applicationName`, `persistentVolumeName`).
+`hostname` is additionally a well-known key: the controller mirrors it into
+the PreviewEnvironment status as the UI's preview URL. The replacements
+(owned here, versioned with the branch) fan the params out to the app's
+actual resources. If a feature branch renames or restructures
 resources, it updates base/env overlays and these replacements **in the same
 commit** — the platform has nothing left to invalidate.
 
