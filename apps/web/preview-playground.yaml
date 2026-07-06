@@ -36,7 +36,7 @@ spec:
     # values are injected by the controller as a valuesObject rendered from
     # `values` — helm values are structure-agnostic, so this stays safe.
     extraSources:
-      - path: helm/addon
+      - path: previews/helm/addon
         helm:
           valueFiles:
             - values.yaml

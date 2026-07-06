@@ -17,7 +17,7 @@ spec:
   preview:
     overlayPath: previews/staging
     extraSources:
-      - path: helm/addon
+      - path: previews/helm/addon
         helm:
           valueFiles:
             - values.yaml

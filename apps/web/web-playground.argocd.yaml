@@ -15,7 +15,7 @@ spec:
       path: apps/web/playground
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
-      path: apps/web/helm/addon
+      path: apps/web/previews/helm/addon
       helm:
         valueFiles:
           - values.yaml

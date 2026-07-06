@@ -10,15 +10,18 @@ base/                     shared across all clusters (incl. image-updater.yaml)
        └─ previews/playground/   = ../../playground + previews/component
   └─ staging/             (dummy here) env overlay
        └─ previews/staging/      = ../../staging   + previews/component
-previews/component/       shared preview deltas: params contract, preview-only
-                          resources, ImageUpdater adaptation, replacements
+previews/component/       minimal shared preview deltas:
+                            kustomization.yaml  (patches + replacements)
+                            preview-params.yaml (the platform contract)
+previews/helm/            helm addon + per-env value files (extra source)
 ```
 
 Previews layer on the **env overlay**, not raw base, so they inherit every
 env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
 re-inventing them. One `PreviewTemplate` per preview-capable env
-(`apps/web/preview.yaml` → playground, `apps/web/preview-staging.yaml` →
-staging) points at the matching overlay.
+(`apps/web/preview-playground.yaml`, `apps/web/preview-staging.yaml`) points
+at the matching overlay. Apps that need preview-only resources (seed jobs,
+generated secrets, …) add them to the component or a per-env preview overlay.
 
 ## Contract with the platform
 

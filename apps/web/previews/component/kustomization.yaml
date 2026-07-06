@@ -8,11 +8,11 @@ kind: Component
 # preview. It is owned by the app team and versions with the branch being
 # previewed.
 
+# Kept deliberately minimal: the params contract plus the smallest set of
+# preview adaptations. Apps that need preview-only resources (seed jobs,
+# generated secrets, ...) add them here or in the per-env preview overlays.
 resources:
   - preview-params.yaml
-  - preview-demo-configmap.yaml
-  - generated-preview-secret.yaml
-  - dependency-verifier-job.yaml
 
 replicas:
   # Previews are always minimal, whatever the env overlay says.
@@ -56,11 +56,6 @@ replacements:
           name: web
         fieldPaths:
           - spec.hostnames.0
-      - select:
-          kind: ConfigMap
-          name: preview-demo
-        fieldPaths:
-          - data.hostname
   - source:
       kind: ConfigMap
       name: preview-params
@@ -71,11 +66,6 @@ replacements:
           name: web
         fieldPaths:
           - spec.template.spec.containers.[name=web].env.[name=PREVIEW_PR].value
-      - select:
-          kind: ConfigMap
-          name: preview-demo
-        fieldPaths:
-          - data.pr
   - source:
       kind: ConfigMap
       name: preview-params
