@@ -108,6 +108,19 @@ spec:
               - op: replace
                 path: /spec/volumeName
                 value: web-{{.PreviewID}}-s3-public
+          # This template ships in the app's base, so a preview (which renders
+          # base) would otherwise re-apply a copy of it into its own namespace.
+          # Drop it from previews.
+          - target:
+              group: preview.sonia.so
+              kind: PreviewTemplate
+              name: web-playground
+            patchTemplate: |-
+              $patch: delete
+              apiVersion: preview.sonia.so/v1alpha1
+              kind: PreviewTemplate
+              metadata:
+                name: web-playground
     - index: 1
       action: keep
       helm:
