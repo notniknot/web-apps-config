@@ -1,22 +1,21 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
 
-# Preview overlay: the complete definition of what a preview environment
-# deploys, owned by the app team like any other env overlay. The preview
-# controller instantiates it N times by generating an Argo CD Application that
-# points here at the requested config ref (main or a PR head) and injecting
-# only structure-agnostic parameters (see preview-params.yaml). Because this
-# overlay lives in the same commit as base, a branch that restructures base
-# adapts the preview in the same PR — atomically.
+# Shared preview deltas, applied ON TOP of a fully rendered env overlay
+# (playground or staging — see ../playground and ../staging). Env overlays
+# already carry their make-it-work patches (compute reduction, hostnames,
+# tracked tags, ...); this component only adds what makes an instance a
+# preview. It is owned by the app team and versions with the branch being
+# previewed.
 
 resources:
-  - ../base
   - preview-params.yaml
   - preview-demo-configmap.yaml
   - generated-preview-secret.yaml
   - dependency-verifier-job.yaml
 
 replicas:
+  # Previews are always minimal, whatever the env overlay says.
   - name: web
     count: 1
 
@@ -44,7 +43,8 @@ patches:
 
 replacements:
   # Fan the per-preview values out from the preview-params contract ConfigMap
-  # to wherever this app needs them. Only this file knows the app's structure.
+  # to wherever this app needs them. Only this file knows the app's structure,
+  # and it lives in the same commit as that structure.
   - source:
       kind: ConfigMap
       name: preview-params

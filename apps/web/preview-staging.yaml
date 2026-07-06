@@ -1,0 +1,36 @@
+# DUMMY, for illustration — previews of the STAGING env. Same app, second
+# preview-capable env: its own template (matched to the staging Argo CD app)
+# pointing at the staging preview overlay. Everything else (component,
+# contract, replacements) is shared.
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: web-staging
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  path: apps/web
+  application:
+    # The Argo CD app name the user selects on the staging cluster.
+    name: web-staging
+
+  preview:
+    overlayPath: previews/staging
+    extraSources:
+      - path: helm/addon
+        helm:
+          valueFiles:
+            - values.yaml
+            - ../values/preview-values.yaml
+          valuesObject:
+            message: preview-{{.PreviewID}}
+
+  values:
+    hostname: web-{{.PreviewID}}.staging.sonia-certs.uk
+    imageTagPrefix: preview-{{.PreviewID}}-
+  expose:
+    - imageTagPrefix
+  secrets:
+    import:
+      - ghcr-pull-secret
+      - shared-preview-secret

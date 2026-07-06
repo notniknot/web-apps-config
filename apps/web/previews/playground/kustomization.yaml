@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Previews of the playground env: the fully rendered playground overlay
+# (including all of its make-it-work patches) plus the shared preview deltas.
+# The preview controller points a generated Application here at the requested
+# config ref; see ../component/preview-params.yaml for the injection contract.
+
+resources:
+  - ../../playground
+
+components:
+  - ../component

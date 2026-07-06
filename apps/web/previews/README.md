@@ -1,47 +1,79 @@
-# Preview overlay
+# Preview overlays
 
-This directory is the **complete definition of a preview environment** for the
-`web` app — a normal kustomize overlay, sibling to `playground/`, owned by the
-app team. The preview controller does **not** patch app resources anymore; it
-instantiates this overlay.
+A preview environment is a normal kustomize build owned by the app team:
+**the rendered env overlay + the shared preview component**, instantiated N
+times by the preview controller.
+
+```
+base/                     shared across all clusters (incl. image-updater.yaml)
+  └─ playground/          env overlay: all its make-it-work patches
+       └─ previews/playground/   = ../../playground + previews/component
+  └─ staging/             (dummy here) env overlay
+       └─ previews/staging/      = ../../staging   + previews/component
+previews/component/       shared preview deltas: params contract, preview-only
+                          resources, ImageUpdater adaptation, replacements
+```
+
+Previews layer on the **env overlay**, not raw base, so they inherit every
+env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
+re-inventing them. One `PreviewTemplate` per preview-capable env
+(`apps/web/preview.yaml` → playground, `apps/web/preview-staging.yaml` →
+staging) points at the matching overlay.
 
 ## Contract with the platform
 
 For each preview `<id>`, the controller generates an Argo CD `Application`
 (name, project, destination, sync policy are platform-owned) with:
 
-| Injection                              | Mechanism                              | Structure-coupled? |
-|----------------------------------------|----------------------------------------|--------------------|
-| source → `apps/web/previews` @ config ref | generated Application source        | no |
-| target namespace `web-preview-<id>`    | `spec.destination` + `kustomize.namespace` | no |
-| preview labels                          | `kustomize.commonLabels`               | no |
+| Injection | Mechanism | Structure-coupled? |
+|---|---|---|
+| source → `apps/web/previews/<env>` @ config ref | generated Application source | no |
+| target namespace `web-preview-<id>` | `spec.destination` + `kustomize.namespace` | no |
+| preview labels | `kustomize.commonLabels` | no |
 | per-instance values (hostname, pr, allowTags, pvName, …) | one kustomize patch on the **`preview-params` ConfigMap `data`** | no |
-| per-preview helm values (addon source)  | `helm.valuesObject` from the template  | no |
+| per-preview helm values (addon source) | `helm.valuesObject` from the template | no |
 
 Everything the platform touches is value-shaped. The **replacements in
-`kustomization.yaml`** (owned here, versioned with the branch) fan the params
-out to the app's actual resources. If a feature branch renames or restructures
-resources, it updates base and these replacements **in the same commit** — the
-platform has nothing left to invalidate.
+`component/kustomization.yaml`** (owned here, versioned with the branch) fan
+the params out to the app's actual resources. If a feature branch renames or
+restructures resources, it updates base/env overlays and these replacements
+**in the same commit** — the platform has nothing left to invalidate.
 
-## What lives where
+## How params are injected — Git is never written
 
-- `preview-params.yaml` — the contract ConfigMap. Placeholders keep
-  `kustomize build` working locally; the controller overwrites `data`.
-- `kustomization.yaml` — includes `../base`, preview-only resources, static
-  preview-shape patches (e.g. ImageUpdater → `argocd` writeback +
-  `newest-build`; the ImageUpdater itself stays in `base/` since it is shared
-  across clusters), and the replacements.
-- `preview-demo-configmap.yaml`, `generated-preview-secret.yaml`,
-  `dependency-verifier-job.yaml` — resources that only exist in previews
-  (formerly `previews/components/`).
-- `../playground/preview.yaml` — the `PreviewTemplate`: identity, default
-  values, UI-exposed overrides, `preview.overlayPath`, extra sources. Applied
-  live by the playground app (so the UI can read it) and read from Git at the
-  requested ref by the controller (so a PR can change it).
+The controller does not commit, push, or edit files anywhere. It only creates
+the Application CR in-cluster, roughly:
+
+```yaml
+spec:
+  source:
+    repoURL: git@github.com:notniknot/web-apps-config.git
+    targetRevision: <main | PR head SHA>
+    path: apps/web/previews/playground
+    kustomize:
+      namespace: web-preview-pr42
+      commonLabels: {preview.sonia.so/id: pr42, ...}
+      patches:
+        - target: {kind: ConfigMap, name: preview-params}
+          patch: |-
+            - op: replace
+              path: /data
+              value: {previewId: pr42, pr: "17", hostname: web-pr42.sonia-certs.uk,
+                      allowTags: "regexp:^pr42-.*", ...}
+```
+
+At sync time the Argo CD repo-server checks out the ref into a scratch dir,
+folds these options into that checkout's kustomization (`kustomize edit …`),
+and builds. Kustomize applies patches **before** replacements, so the injected
+`preview-params` data — not the placeholders committed here — is what the
+replacements fan out. The checkout is discarded after render; deleting a
+preview deletes the Application and leaves no trace in Git. The placeholder
+values in `component/preview-params.yaml` exist only so local
+`kustomize build` works.
 
 ## Local check
 
 ```sh
-kustomize build apps/web/previews
+kustomize build apps/web/previews/playground
+kustomize build apps/web/previews/staging
 ```
