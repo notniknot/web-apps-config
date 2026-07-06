@@ -11,10 +11,18 @@ base/                     shared across all clusters (incl. image-updater.yaml)
   └─ staging/             (dummy here) env overlay
        └─ previews/staging/      = ../../staging   + previews/component
 previews/component/       minimal shared preview deltas:
-                            kustomization.yaml  (patches + replacements)
+                            kustomization.yaml  (static patches, replicas)
                             preview-params.yaml (the platform contract)
 previews/helm/            helm addon + per-env value files (extra source)
 ```
+
+The **replacements live in the per-env roots** (`previews/<env>/
+kustomization.yaml`), not in the component. This is load-bearing: component
+transformers run when the component is accumulated, *before* the root's own
+patches — and the platform's preview-params patch is folded into the root at
+render time. Within one kustomization, ordering is patches → replacements, so
+only root-level replacements see the injected values (verified by simulating
+the injection with `kustomize edit add patch` + build).
 
 Previews layer on the **env overlay**, not raw base, so they inherit every
 env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
