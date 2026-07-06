@@ -6,15 +6,28 @@ times by the preview controller.
 
 ```
 base/                     shared across all clusters (incl. image-updater.yaml)
-  └─ playground/          env overlay: all its make-it-work patches
+  └─ playground/          env overlay: make-it-work patches + preview.yaml
        └─ previews/playground/   = ../../playground + previews/component
-  └─ staging/             (dummy here) env overlay
+  └─ staging/             (illustrative) env overlay + preview.yaml
        └─ previews/staging/      = ../../staging   + previews/component
 previews/component/       minimal shared preview deltas:
                             kustomization.yaml  (static patches, replicas)
                             preview-params.yaml (the platform contract)
 previews/helm/            helm addon + per-env value files (extra source)
 ```
+
+Previews layer on the **env overlay**, not raw base, so they inherit every
+env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
+re-inventing them.
+
+**Templates travel with their env**: each env overlay carries its own
+`preview.yaml` (`PreviewTemplate`, named `web` like the app), so every cluster
+receives exactly its env's template through plain GitOps. Since previews wrap
+the env overlay, the template would render into the preview too — the
+**controller strips it** by appending a `$patch: delete` for it (it knows the
+template's name from parsing it) to the injected patch set. In a local
+`kustomize build` of a preview overlay the template is therefore still
+visible; that is expected.
 
 The **replacements live in the per-env roots** (`previews/<env>/
 kustomization.yaml`), not in the component. This is load-bearing: component
@@ -23,13 +36,6 @@ patches — and the platform's preview-params patch is folded into the root at
 render time. Within one kustomization, ordering is patches → replacements, so
 only root-level replacements see the injected values (verified by simulating
 the injection with `kustomize edit add patch` + build).
-
-Previews layer on the **env overlay**, not raw base, so they inherit every
-env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
-re-inventing them. One `PreviewTemplate` per preview-capable env
-(`apps/web/preview-playground.yaml`, `apps/web/preview-staging.yaml`) points
-at the matching overlay. Apps that need preview-only resources (seed jobs,
-generated secrets, …) add them to the component or a per-env preview overlay.
 
 ## Contract with the platform
 
@@ -41,14 +47,15 @@ For each preview `<id>`, the controller generates an Argo CD `Application`
 | source → `apps/web/previews/<env>` @ config ref | generated Application source | no |
 | target namespace `web-preview-<id>` | `spec.destination` + `kustomize.namespace` | no |
 | preview labels | `kustomize.commonLabels` | no |
-| per-instance values (hostname, pr, allowTags, pvName, …) | one kustomize patch on the **`preview-params` ConfigMap `data`** | no |
+| per-instance values (hostname, configPR, imageAllowTags, …) | one kustomize patch on the **`preview-params` ConfigMap `data`** | no |
+| drop the env's `PreviewTemplate` from the render | `$patch: delete` appended by the controller | no (platform-owned kind) |
 | per-preview helm values (addon source) | `helm.valuesObject` from the template | no |
 
-Everything the platform touches is value-shaped. The **replacements in
-`component/kustomization.yaml`** (owned here, versioned with the branch) fan
-the params out to the app's actual resources. If a feature branch renames or
-restructures resources, it updates base/env overlays and these replacements
-**in the same commit** — the platform has nothing left to invalidate.
+Everything the platform touches is value-shaped or targets platform-owned
+kinds. The replacements (owned here, versioned with the branch) fan the params
+out to the app's actual resources. If a feature branch renames or restructures
+resources, it updates base/env overlays and these replacements **in the same
+commit** — the platform has nothing left to invalidate.
 
 ## How params are injected — Git is never written
 
@@ -69,8 +76,16 @@ spec:
           patch: |-
             - op: replace
               path: /data
-              value: {previewId: pr42, pr: "17", hostname: web-pr42.sonia-certs.uk,
-                      allowTags: "regexp:^pr42-.*", ...}
+              value: {previewID: pr42, configPR: "17",
+                      hostname: web-pr42.sonia-certs.uk,
+                      imageAllowTags: "regexp:^pr42-.*", ...}
+        - target: {group: preview.sonia.so, kind: PreviewTemplate, name: web}
+          patch: |-
+            $patch: delete
+            apiVersion: preview.sonia.so/v1alpha1
+            kind: PreviewTemplate
+            metadata:
+              name: web
 ```
 
 At sync time the Argo CD repo-server checks out the ref into a scratch dir,
@@ -81,6 +96,21 @@ replacements fan out. The checkout is discarded after render; deleting a
 preview deletes the Application and leaves no trace in Git. The placeholder
 values in `component/preview-params.yaml` exist only so local
 `kustomize build` works.
+
+## Controller migration path
+
+This layout can be reached in two phases (idea credit: the alternative
+`feat/branch-declared-preview-profile` design):
+
+1. **Path rewrite** — today's controller gains only `sources[].path` support;
+   templates keep authoring the params patch via `patchTemplate`. Previews
+   gain branch fidelity and this overlay structure immediately.
+2. **Built-in contract** — the controller owns the params patch, the template
+   delete, and Application generation (`preview.overlayPath`,
+   `preview.extraSources`); index-based source rules and per-app
+   `patchTemplate` boilerplate are deleted (kept only as a documented escape
+   hatch). Phase 2 must be scheduled explicitly — the two mechanisms
+   coexisting indefinitely is how stale-path bugs happen.
 
 ## Local check
 

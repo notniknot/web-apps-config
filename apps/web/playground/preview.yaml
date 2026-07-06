@@ -1,15 +1,17 @@
-# PreviewTemplate for previews of the PLAYGROUND env (one template per
-# preview-capable env; see preview-staging.yaml). This file is intentionally
-# NOT part of any kustomize overlay: previews layer on top of the rendered env
-# overlays, so putting it inside one would re-render it into every preview
-# (the old `$patch: delete` hack). The live cluster copy the UI reads is
-# published from main by the preview controller itself (it already reads this
-# repo), which also removes the stale-UI problem of a main-applied copy
-# diverging from a PR's template.
+# PreviewTemplate for previews of this env. It lives INSIDE the env overlay so
+# every cluster receives exactly its own env's template through plain GitOps —
+# no extra distribution machinery, and a config PR changes it at the PR ref
+# naturally. Named "web" like the app itself: per-cluster identity, same as
+# the Application manifests.
+#
+# Because previews wrap this overlay, the rendered preview would contain a
+# copy of this template; the CONTROLLER strips it by appending a fixed
+# $patch:delete for it to the injected patch set (it knows the template's
+# name — it just parsed this file). App authors never write that hack.
 apiVersion: preview.sonia.so/v1alpha1
 kind: PreviewTemplate
 metadata:
-  name: web-playground
+  name: web
 spec:
   enabled: true
   configRepository: notniknot/web-apps-config
@@ -26,7 +28,8 @@ spec:
   # config ref and injects only structure-agnostic parameters:
   #   - kustomize.namespace + preview commonLabels on the generated Application
   #   - the data of the `preview-params` ConfigMap (the single patch target)
-  # There are no source rules and no resource patches in this template anymore;
+  #   - the $patch:delete for this template (see header)
+  # There are no source rules and no resource patches in this template;
   # everything structural lives in apps/web/previews/ and versions with the
   # branch being previewed.
   preview:

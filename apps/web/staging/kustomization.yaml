@@ -1,12 +1,16 @@
-# DUMMY overlay for illustration — this repo's test setup only runs
-# playground. It stands in for a real staging env overlay with its own
-# make-it-work patches, to show that previews layer on top of a rendered env
-# overlay rather than raw base.
+# Illustrative staging env overlay — this repo's test setup deploys only
+# playground (see web-staging.argocd.yaml for the cluster Application that
+# would consume it). It shows that previews layer on top of a rendered env
+# overlay with its own make-it-work patches, rather than raw base.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   - ../base
+  # This env's PreviewTemplate: applied to the cluster with the app so the
+  # preview UI can read it. The preview controller strips it from preview
+  # renders (see preview.yaml header).
+  - preview.yaml
 
 images:
   - name: ghcr.io/notniknot/web-apps

@@ -39,7 +39,7 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
-      fieldPath: data.pr
+      fieldPath: data.configPR
     targets:
       - select:
           kind: Deployment
@@ -61,7 +61,7 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
-      fieldPath: data.allowTags
+      fieldPath: data.imageAllowTags
     targets:
       - select:
           group: argocd-image-updater.argoproj.io
@@ -76,7 +76,7 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
-      fieldPath: data.namespace
+      fieldPath: data.hostNamespace
     targets:
       - select:
           version: v1
@@ -87,7 +87,7 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
-      fieldPath: data.pvName
+      fieldPath: data.persistentVolumeName
     targets:
       - select:
           version: v1

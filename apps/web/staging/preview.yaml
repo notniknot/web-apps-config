@@ -1,18 +1,19 @@
-# DUMMY, for illustration — previews of the STAGING env. Same app, second
-# preview-capable env: its own template (matched to the staging Argo CD app)
-# pointing at the staging preview overlay. Everything else (component,
-# contract, replacements) is shared.
+# PreviewTemplate for previews of the staging env (illustrative — this test
+# setup deploys only playground). Same placement rationale as
+# ../playground/preview.yaml: the env overlay carries its own template, so the
+# staging cluster gets it via GitOps. application.name is "web" here too —
+# app identity is per cluster, and the backend matches the template against
+# the Argo CD app the user selected on that cluster.
 apiVersion: preview.sonia.so/v1alpha1
 kind: PreviewTemplate
 metadata:
-  name: web-staging
+  name: web
 spec:
   enabled: true
   configRepository: notniknot/web-apps-config
   path: apps/web
   application:
-    # The Argo CD app name the user selects on the staging cluster.
-    name: web-staging
+    name: web
 
   preview:
     overlayPath: previews/staging
