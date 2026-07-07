@@ -34,7 +34,7 @@ replacements:
       - select:
           group: gateway.networking.k8s.io
           kind: HTTPRoute
-          name: web
+          name: web-route
         fieldPaths:
           - spec.hostnames.0
   - source:

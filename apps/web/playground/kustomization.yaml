@@ -26,7 +26,7 @@ patches:
   - target:
       group: gateway.networking.k8s.io
       kind: HTTPRoute
-      name: web
+      name: web-route
     patch: |-
       - op: replace
         path: /spec/hostnames/0
