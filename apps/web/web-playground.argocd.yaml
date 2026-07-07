@@ -10,6 +10,11 @@ metadata:
 spec:
   project: web
   sources:
+    # Source for raw manifests (kustomize)
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      path: apps/web/playground
+      kustomize: {}
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
       path: apps/web/helm/addon
@@ -20,10 +25,6 @@ spec:
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
       ref: values
-    # Source for raw manifests (kustomize)
-    - repoURL: git@github.com:notniknot/web-apps-config.git
-      targetRevision: main
-      path: apps/web/playground
   destination:
     server: https://kubernetes.default.svc
     namespace: web
