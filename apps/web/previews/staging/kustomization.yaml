@@ -1,0 +1,103 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Previews of the staging env: the fully rendered staging overlay (including
+# all of its make-it-work patches) plus the shared preview component. The
+# preview controller points a generated Application here at the requested
+# config ref; see ../component/preview-params.yaml for the injection contract.
+
+resources:
+  - ../../staging
+
+components:
+  - ../component
+
+# The replacements MUST live here in the build root, not in the component:
+# component transformers run when the component is accumulated, BEFORE this
+# kustomization's own patches — and the platform injects the preview-params
+# patch exactly here (Argo CD folds Application kustomize.patches into this
+# file at render time). Root ordering is patches -> replacements, so the
+# injected params are fanned out; in the component the replacements would run
+# too early and fan out the committed placeholders. (Duplicated in
+# ../playground/kustomization.yaml; kustomize load restrictions prevent sharing
+# a replacement file across roots unless --load-restrictor is relaxed.)
+replacements:
+  # Fan the per-preview values out from the preview-params contract ConfigMap
+  # to wherever this app needs them. Only this file knows the app's structure,
+  # and it lives in the same commit as that structure.
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.hostname
+    targets:
+      - select:
+          group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: web
+        fieldPaths:
+          - spec.hostnames.0
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.configPR
+    targets:
+      - select:
+          kind: Deployment
+          name: web
+        fieldPaths:
+          - spec.template.spec.containers.[name=web].env.[name=PREVIEW_PR].value
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.applicationName
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: web
+        fieldPaths:
+          - metadata.name
+          - spec.applicationRefs.0.namePattern
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.imageAllowTags
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: web
+        fieldPaths:
+          - spec.applicationRefs.0.images.0.commonUpdateSettings.allowTags
+  # The S3 PersistentVolume is cluster-scoped, so each preview needs a unique
+  # name; the PVC binds it explicitly and the claimRef must point back at the
+  # preview namespace. The claimRef.namespace replacement must run before the
+  # rename below — replacements apply in order and select by current name.
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.hostNamespace
+    targets:
+      - select:
+          version: v1
+          kind: PersistentVolume
+          name: web-s3-public
+        fieldPaths:
+          - spec.claimRef.namespace
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.persistentVolumeName
+    targets:
+      - select:
+          version: v1
+          kind: PersistentVolume
+          name: web-s3-public
+        fieldPaths:
+          - metadata.name
+      - select:
+          version: v1
+          kind: PersistentVolumeClaim
+          name: web-s3-public
+        fieldPaths:
+          - spec.volumeName

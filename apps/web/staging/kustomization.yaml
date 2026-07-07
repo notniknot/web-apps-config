@@ -1,3 +1,7 @@
+# Illustrative staging env overlay — this repo's test setup deploys only
+# playground (see web-staging.argocd.yaml for the cluster Application that
+# would consume it). It shows that previews layer on top of a rendered env
+# overlay with its own make-it-work patches, rather than raw base.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -10,17 +14,17 @@ resources:
 
 images:
   - name: ghcr.io/notniknot/web-apps
-    newTag: main
+    newTag: staging
 
 labels:
   - includeSelectors: false
     includeTemplates: true
     pairs:
-      app.kubernetes.io/version: main
+      app.kubernetes.io/version: staging
 
 replicas:
   - name: web
-    count: 1
+    count: 2
 
 patches:
   - target:
@@ -30,7 +34,7 @@ patches:
     patch: |-
       - op: replace
         path: /spec/hostnames/0
-        value: web.playground.sonia-certs.uk
+        value: web.staging.sonia-certs.uk
   - target:
       group: argocd-image-updater.argoproj.io
       kind: ImageUpdater
@@ -38,4 +42,4 @@ patches:
     patch: |-
       - op: replace
         path: /spec/applicationRefs/0/images/0/imageName
-        value: ghcr.io/notniknot/web-apps:main
+        value: ghcr.io/notniknot/web-apps:staging

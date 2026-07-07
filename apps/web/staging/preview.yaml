@@ -1,0 +1,42 @@
+# PreviewTemplate for previews of the staging env (illustrative — this test
+# setup deploys only playground). Same placement rationale as
+# ../playground/preview.yaml: the env overlay carries its own template, so the
+# staging cluster gets it via GitOps. application.name is "web" here too —
+# app identity is per cluster, and the backend matches the template against
+# the Argo CD app the user selected on that cluster.
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: web
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  path: apps/web
+  application:
+    name: web
+    path: web-staging.argocd.yaml
+
+  values:
+    hostname:
+      default: web-{{.PreviewID}}.staging.sonia-certs.uk
+    imageTagPrefix:
+      default: preview-{{.PreviewID}}-
+      expose: true
+      description: >-
+        Tag prefix the preview's Image Updater follows (newest matching build
+        wins). Point it at your CI's tag scheme, e.g. pr42-.
+
+  preview:
+    overlayPath: previews/staging
+    params:
+      hostname: "{{.Values.hostname}}"
+      imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+    sourceOverrides:
+      - match:
+          path: helm/addon
+        helm:
+          valueFiles:
+            - $values/apps/web/base/addon-values.yaml
+            - $values/apps/web/previews/staging/addon-values.yaml
+          valuesObject:
+            message: preview-{{.PreviewID}}

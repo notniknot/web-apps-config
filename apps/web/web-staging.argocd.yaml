@@ -1,3 +1,7 @@
+# The staging cluster's Application for this app. Same name as the playground
+# one on purpose: each cluster's app-of-apps picks its own *.argocd.yaml, so
+# "web" is the app's identity on every cluster. In this single-cluster test
+# setup only web-playground.argocd.yaml is actually deployed.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -16,14 +20,14 @@ spec:
       helm:
         valueFiles:
           - $values/apps/web/base/addon-values.yaml
-          - $values/apps/web/playground/addon-values.yaml
+          - $values/apps/web/staging/addon-values.yaml
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
       ref: values
     # Source for raw manifests (kustomize)
     - repoURL: git@github.com:notniknot/web-apps-config.git
       targetRevision: main
-      path: apps/web/playground
+      path: apps/web/staging
   destination:
     server: https://kubernetes.default.svc
     namespace: web

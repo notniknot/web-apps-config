@@ -1,0 +1,84 @@
+# PreviewTemplate for previews of this env. It lives INSIDE the env overlay so
+# every cluster receives exactly its own env's template through plain GitOps —
+# no extra distribution machinery, and a config PR changes it at the PR ref
+# naturally. Named "web" like the app itself: per-cluster identity, same as
+# the Application manifests.
+#
+# Because previews wrap this overlay, the rendered preview would contain a
+# copy of this template; the CONTROLLER strips it by appending a fixed
+# $patch:delete for it to the injected patch set (it knows the template's
+# name — it just parsed this file). App authors never write that hack.
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: web
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  # The app directory in the config repo. The preview backend derives the
+  # request's application ref from it (app name = last path segment).
+  path: apps/web
+  application:
+    name: web
+    # The env's Application manifest (app-relative). Its spec.sources are the
+    # preview's sources: read at the config ref, so a PR editing them (chart
+    # bumps, added sources) is reflected in the preview. Everything else in
+    # the manifest (project, destination, sync policy) is ignored — the
+    # controller generates those.
+    path: web-playground.argocd.yaml
+
+  # ── Values ─────────────────────────────────────────────────────────────────
+  # Named inputs to the params mapping below. `expose: true` makes a value
+  # user-overridable from the preview UI (overrides are charset-guarded and
+  # never re-templated); everything else is fixed by this template.
+  values:
+    hostname:
+      # Also surfaced by the controller as the preview URL in the UI
+      # (well-known key). Not exposed: uniqueness comes from PreviewID.
+      default: web-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix:
+      default: preview-{{.PreviewID}}-
+      expose: true
+      description: >-
+        Tag prefix the preview's Image Updater follows (newest matching build
+        wins). Point it at your CI's tag scheme, e.g. pr42-.
+
+  # ── Preview definition ─────────────────────────────────────────────────────
+  # The preview Application inherits spec.sources from application.path above,
+  # then the controller applies value-shaped rewrites only:
+  #   - the source whose path is this env's overlay is swapped to overlayPath
+  #     (path-matched, never index-matched; no or ambiguous match = deny) and
+  #     receives the preview commonLabels, the preview-params data patch
+  #     rendered from `params`, and the template $patch:delete. No kustomize
+  #     namespace is set: destination.namespace places namespace-less
+  #     resources, and explicit pins (ImageUpdater -> argocd) survive.
+  #   - every config-repo source is pinned to the PR head SHA
+  #   - sourceOverrides (selector-matched) adjust inherited sources per preview
+  # No index rules, no resource patches: structure lives in the overlay and
+  # versions with the branch being previewed.
+  preview:
+    overlayPath: previews/playground
+    # What the controller writes into preview-params.data. Keys are chosen
+    # here; the replacements in the preview overlay fan them out. Context
+    # params (previewID, configPR, hostNamespace, applicationName,
+    # persistentVolumeName) are provided by the controller automatically.
+    params:
+      hostname: "{{.Values.hostname}}"
+      imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+    # Per-source adjustments to inherited sources, matched by stable selectors
+    # (path/chart/repoURL/ref/releaseName), never by position; an override
+    # applies to every matching source, empty rendered values inherit, and
+    # `action: drop` removes matches (see previews/README.md). Here: the helm
+    # addon swaps the env's values file for the preview one (which lives next
+    # to the preview kustomization, so a config PR can edit it). The inherited
+    # `ref: values` source is SHA-pinned like every config-repo source, so the
+    # $values files resolve at the PR ref too.
+    sourceOverrides:
+      - match:
+          path: helm/addon
+        helm:
+          valueFiles:
+            - $values/apps/web/base/addon-values.yaml
+            - $values/apps/web/previews/playground/addon-values.yaml
+          valuesObject:
+            message: preview-{{.PreviewID}}
