@@ -6,12 +6,13 @@ metadata:
     app.kubernetes.io/name: test-case
 spec:
   parentRefs:
-    - name: public
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: north-south
       namespace: kgateway-system
-      sectionName: https
   hostnames:
     - test-case.playground.sonia-certs.uk
   rules:
     - backendRefs:
         - name: test-case
-          port: 8080
+          port: 80
