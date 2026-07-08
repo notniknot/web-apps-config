@@ -38,3 +38,13 @@ Dedicated app: `apps/test-case`
 - URL check: the enabled `Open` target returned Envoy HTTP `404`, because no HTTPRoute served the hostname.
 - Finding: the controller/UI currently treat a hostname-derived URL as openable even when the rendered preview has no route; the Open button can lead to a dead URL for route-less apps.
 - Cleanup: deleted from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`.
+
+## Test 3 - Slow cleanup blocked by namespaced finalizer
+
+- Started: 2026-07-08 05:16 UTC
+- Config commit: `d332132`
+- Setup: temporarily added preview-only ConfigMap `slow-cleanup-blocker` with finalizer `preview.sonia.so/e2e-slow-cleanup`.
+- Action: created `tc-slow-clean-0708` from the public Argo CD Previews UI with overrides `appName=slow-clean-app`, `imageTagPrefix=preview-slow-clean-`, `message=slow-clean-message`, `ttl=1h`, then deleted it from the UI after it became `Synced` / `Healthy`.
+- Result: UI showed `Deleting`; `PreviewEnvironmentRequest` had a deletion timestamp and status `Deleting` with message `waiting for Argo CD to prune application test-case-apps-preview-tc-slow-clean-0708`; generated Application was `OutOfSync` / `Progressing`; blocker ConfigMap had a deletion timestamp but retained the test finalizer.
+- Finding: the controller did not orphan resources or prematurely remove the request while Argo CD prune was blocked; it kept the request in `Deleting` until the blocking finalizer was cleared.
+- Cleanup: manually removed the test finalizer from `slow-cleanup-blocker`; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`.
