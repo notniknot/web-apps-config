@@ -33,3 +33,7 @@ spec:
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
       appName: "{{.Values.appName}}"
       generatedMessage: "{{.Values.message}}"
+    sourceOverrides:
+      - match:
+          path: does-not-exist
+        targetRevision: main
