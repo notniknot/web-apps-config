@@ -138,3 +138,12 @@ Dedicated app: `apps/test-case`
 - Verified: A rendered `concurrent-a` and B rendered `concurrent-b` initially; after the same-name update only A changed to `concurrent-a-updated` / `concurrent-a-updated-message`; B stayed `concurrent-b` / `concurrent-b-message`; exactly two `tc-concurrent-*` requests existed before cleanup.
 - Finding: parallel previews for the same app are isolated by preview ID, and duplicate/same-name creates are idempotent updates.
 - Cleanup: deleted both requests; generated Applications and namespaces were pruned.
+
+## Test 13 - TTL garbage collection
+
+- Started: 2026-07-08 08:38 UTC
+- Action: created `tc-ttl-0708` with `ttl=30s` and waited past the TTL.
+- Result: preview became `Synced` / `Healthy`; after the TTL elapsed, the request transitioned to `Deleting` with message `waiting for Argo CD to prune application test-case-apps-preview-tc-ttl-0708`, then was deleted automatically.
+- Verified: generated Application and namespace returned `NotFound` after TTL-triggered cleanup completed.
+- Finding: TTL garbage collection is active and cleans up the request, generated Application, and namespace.
+- Cleanup: no manual preview deletion was needed; only post-GC verification was performed.
