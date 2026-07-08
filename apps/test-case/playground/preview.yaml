@@ -33,3 +33,7 @@ spec:
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
       appName: "{{.Values.appName}}"
       generatedMessage: "{{.Values.message}}"
+    sourceOverrides:
+      - match:
+          path: extra
+        action: drop
