@@ -129,3 +129,12 @@ Dedicated app: `apps/test-case`
 - Verified: `PreviewEnvironmentRequest.spec` updated in place; Deployment env rendered `APP_NAME=edit-after` and `GENERATED_SECRET_MESSAGE=edit-after-message`; ImageUpdater rendered `allowTags=regexp:^preview-edit-after-.*`; public URL returned HTTP `200` and rendered `edit-after` and `edit-after-message`.
 - Finding: public UI edit flow updates the existing request and generated resources in place.
 - Cleanup: deleted the edited request; generated Application and namespace were pruned.
+
+## Test 12 - Concurrent previews and same-name update
+
+- Started: 2026-07-08 08:35 UTC
+- Action: created `tc-concurrent-a-0708` and `tc-concurrent-b-0708` in parallel, then applied a same-name update to `tc-concurrent-a-0708`.
+- Result: both previews became `Synced` / `Healthy` with distinct namespaces and URLs; same-name apply configured the existing A request instead of creating another request or colliding with B.
+- Verified: A rendered `concurrent-a` and B rendered `concurrent-b` initially; after the same-name update only A changed to `concurrent-a-updated` / `concurrent-a-updated-message`; B stayed `concurrent-b` / `concurrent-b-message`; exactly two `tc-concurrent-*` requests existed before cleanup.
+- Finding: parallel previews for the same app are isolated by preview ID, and duplicate/same-name creates are idempotent updates.
+- Cleanup: deleted both requests; generated Applications and namespaces were pruned.
