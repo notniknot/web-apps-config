@@ -99,3 +99,14 @@ Dedicated app: `apps/test-case`
 - Verified: generated Application had only one source, `apps/test-case/previews/playground` pinned to the PR SHA; ConfigMap `source-override-should-be-dropped` was absent from the preview namespace; public URL returned HTTP `200` and rendered `source-drop-app` and `source-drop-message`.
 - Finding: sourceOverrides `action=drop` works with selector matching by app-relative path, and a multi-source app can be reduced to the swapped preview source when the template intentionally drops the extra source.
 - Cleanup: deleted preview from public UI; verified request and namespace returned `NotFound`; closed PR `#10` and deleted its branch.
+
+## Test 9 - sourceOverrides no-match denial
+
+- Started: 2026-07-08 08:25 UTC
+- Config PR: `notniknot/web-apps-config#11`, commit `b93f630`, branch `codex/e2e-source-overrides-invalid`.
+- Setup: PR added an effectful `sourceOverrides` entry with `match.path=does-not-exist` and `targetRevision=main`.
+- Action: created request `tc-src-invalid-0708` against config PR `11`.
+- Result: request stayed in `phase=Error` with reason `InvalidTemplate`; message reported `preview.sourceOverrides[0] ... matches no inherited source`.
+- Verified: no preview namespace was created.
+- Finding: sourceOverrides no-match denial is enforced for effectful overrides and surfaces a clear `InvalidTemplate` status.
+- Cleanup: deleted the error request; closed PR `#11` and deleted its branch.
