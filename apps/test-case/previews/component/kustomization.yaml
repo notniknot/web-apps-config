@@ -3,3 +3,13 @@ kind: Component
 
 resources:
   - preview-params.yaml
+
+patches:
+  - target:
+      group: argocd-image-updater.argoproj.io
+      kind: ImageUpdater
+      name: test-case
+    patch: |-
+      - op: replace
+        path: /spec/applicationRefs/0/images/0/commonUpdateSettings/updateStrategy
+        value: newest-build
