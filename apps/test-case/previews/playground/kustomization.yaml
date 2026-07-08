@@ -1,0 +1,74 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../playground
+
+components:
+  - ../component
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.hostname
+    targets:
+      - select:
+          group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: test-case
+        fieldPaths:
+          - spec.hostnames.0
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.configPR
+    targets:
+      - select:
+          kind: Deployment
+          name: test-case
+        fieldPaths:
+          - spec.template.spec.containers.[name=web].env.[name=PREVIEW_PR].value
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.appName
+    targets:
+      - select:
+          kind: Deployment
+          name: test-case
+        fieldPaths:
+          - spec.template.spec.containers.[name=web].env.[name=APP_NAME].value
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.generatedMessage
+    targets:
+      - select:
+          kind: Deployment
+          name: test-case
+        fieldPaths:
+          - spec.template.spec.containers.[name=web].env.[name=GENERATED_SECRET_MESSAGE].value
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.applicationName
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: test-case
+        fieldPaths:
+          - metadata.name
+          - spec.applicationRefs.0.namePattern
+  - source:
+      kind: ConfigMap
+      name: preview-params
+      fieldPath: data.imageAllowTags
+    targets:
+      - select:
+          group: argocd-image-updater.argoproj.io
+          kind: ImageUpdater
+          name: test-case
+        fieldPaths:
+          - spec.applicationRefs.0.images.0.commonUpdateSettings.allowTags

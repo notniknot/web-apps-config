@@ -1,0 +1,30 @@
+apiVersion: argocd-image-updater.argoproj.io/v1alpha1
+kind: ImageUpdater
+metadata:
+  name: test-case
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: test-case
+    app.kubernetes.io/part-of: preview-e2e
+spec:
+  writeBackConfig:
+    method: git:secret:argocd/repo-notniknot-web-apps-config
+    gitConfig:
+      repository: git@github.com:notniknot/web-apps-config.git
+      branch: main
+      writeBackTarget: kustomization
+  applicationRefs:
+    - namePattern: test-case
+      images:
+        - alias: web
+          imageName: ghcr.io/notniknot/web-apps:main
+          manifestTargets:
+            kustomize:
+              name: ghcr.io/notniknot/web-apps
+          commonUpdateSettings:
+            updateStrategy: digest
+            forceUpdate: true
+            allowTags: regexp:^main$
+            pullSecret: pullsecret:argocd/ghcr-pull-secret
+            platforms:
+              - linux/amd64

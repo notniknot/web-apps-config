@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: test-case
+  namespace: web
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+spec:
+  project: web
+  sources:
+    - repoURL: git@github.com:notniknot/web-apps-config.git
+      targetRevision: main
+      path: apps/test-case/playground
+      kustomize: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: web
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      refresh: true
+      limit: -1
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

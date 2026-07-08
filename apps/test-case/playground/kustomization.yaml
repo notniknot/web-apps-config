@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+  - preview.yaml
+
+images:
+  - name: ghcr.io/notniknot/web-apps
+    newTag: main
+
+labels:
+  - includeSelectors: false
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/version: main
+
+replicas:
+  - name: test-case
+    count: 1
+
+patches:
+  - target:
+      group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: test-case
+    patch: |-
+      - op: replace
+        path: /spec/hostnames/0
+        value: test-case.playground.sonia-certs.uk
+  - target:
+      group: argocd-image-updater.argoproj.io
+      kind: ImageUpdater
+      name: test-case
+    patch: |-
+      - op: replace
+        path: /spec/applicationRefs/0/images/0/imageName
+        value: ghcr.io/notniknot/web-apps:main

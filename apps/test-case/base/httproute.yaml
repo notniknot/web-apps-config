@@ -1,0 +1,17 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: test-case
+  labels:
+    app.kubernetes.io/name: test-case
+spec:
+  parentRefs:
+    - name: public
+      namespace: kgateway-system
+      sectionName: https
+  hostnames:
+    - test-case.playground.sonia-certs.uk
+  rules:
+    - backendRefs:
+        - name: test-case
+          port: 8080

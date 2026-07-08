@@ -1,0 +1,35 @@
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: test-case
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  path: apps/test-case
+  application:
+    name: test-case
+    path: test-case-playground.argocd.yaml
+
+  values:
+    hostname:
+      default: test-case-{{.PreviewID}}.sonia-certs.uk
+    imageTagPrefix:
+      default: preview-{{.PreviewID}}-
+      expose: true
+      description: Image tag prefix that Image Updater follows.
+    appName:
+      default: test-case {{.PreviewID}}
+      expose: true
+      description: Value rendered into APP_NAME.
+    message:
+      default: message-{{.PreviewID}}
+      expose: true
+      description: Value rendered into GENERATED_SECRET_MESSAGE.
+
+  preview:
+    overlayPath: previews/playground
+    params:
+      hostname: "{{.Values.hostname}}"
+      imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+      appName: "{{.Values.appName}}"
+      generatedMessage: "{{.Values.message}}"

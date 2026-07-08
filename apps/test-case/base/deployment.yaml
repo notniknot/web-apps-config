@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-case
+  labels:
+    app.kubernetes.io/name: test-case
+    app.kubernetes.io/part-of: preview-e2e
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: test-case
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: test-case
+        app.kubernetes.io/part-of: preview-e2e
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+      containers:
+        - name: web
+          image: ghcr.io/notniknot/web-apps:main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: APP_NAME
+              value: test-case
+            - name: APP_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/version']
+            - name: PREVIEW_PR
+              value: none
+            - name: SHARED_SECRET_MESSAGE
+              value: baseline-shared
+            - name: GENERATED_SECRET_MESSAGE
+              value: baseline-generated
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
