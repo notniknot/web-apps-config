@@ -3,3 +3,4 @@ kind: Component
 
 resources:
   - preview-params.yaml
+  - slow-cleanup-blocker.yaml

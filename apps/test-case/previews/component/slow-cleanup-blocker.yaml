@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slow-cleanup-blocker
+  finalizers:
+    - preview.sonia.so/e2e-slow-cleanup
+data:
+  purpose: e2e deletion blocking resource
