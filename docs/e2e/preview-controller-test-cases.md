@@ -88,3 +88,14 @@ Dedicated app: `apps/test-case`
 - Verified: `preview-params` included controller-owned params `previewID`, `configPR`, `hostNamespace`, `applicationName` plus exposed value fan-out; Deployment env rendered `APP_NAME`, `PREVIEW_PR=0`, and `GENERATED_SECRET_MESSAGE`; HTTPRoute hostname rendered `test-case-tc-values-params-0708.sonia-certs.uk`; ImageUpdater rendered `allowTags=regexp:^preview-values-0708-.*`; public URL returned HTTP `200` and rendered the allowed values.
 - Finding: exposed values are shape-validated consistently, hidden values cannot be overridden, and params fan out correctly into ConfigMap, Deployment, HTTPRoute, ImageUpdater, and the public app.
 - Cleanup: deleted both requests; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespaces all returned `NotFound`.
+
+## Test 8 - sourceOverrides drop with multi-source Application
+
+- Started: 2026-07-08 08:21 UTC
+- Config PR: `notniknot/web-apps-config#10`, commit `0e4bf22`, branch `codex/e2e-source-overrides-drop`.
+- Setup: PR added a second config-repo Application source at `apps/test-case/extra` containing ConfigMap `source-override-should-be-dropped`, and added `PreviewTemplate.spec.preview.sourceOverrides` with `match.path=extra` and `action=drop`.
+- Action: enabled `Preview a config repository PR` in the public UI, entered config PR `10`, and created `tc-src-drop-0708` with overrides `appName=source-drop-app`, `imageTagPrefix=preview-src-drop-`, `message=source-drop-message`, `ttl=1h`.
+- Result: preview became `Synced` / `Healthy`; `PreviewEnvironment.spec.resolvedSources.config` recorded PR `10` and SHA `0e4bf221a385288b88532a42431948be8f86308f`.
+- Verified: generated Application had only one source, `apps/test-case/previews/playground` pinned to the PR SHA; ConfigMap `source-override-should-be-dropped` was absent from the preview namespace; public URL returned HTTP `200` and rendered `source-drop-app` and `source-drop-message`.
+- Finding: sourceOverrides `action=drop` works with selector matching by app-relative path, and a multi-source app can be reduced to the swapped preview source when the template intentionally drops the extra source.
+- Cleanup: deleted preview from public UI; verified request and namespace returned `NotFound`; closed PR `#10` and deleted its branch.
