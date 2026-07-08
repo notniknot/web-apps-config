@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: test-case
+  annotations:
+    e2e.preview.sonia.so/config-pr-patched: "true"
   labels:
     app.kubernetes.io/name: test-case
     app.kubernetes.io/part-of: preview-e2e
@@ -28,6 +30,8 @@ spec:
           env:
             - name: APP_NAME
               value: test-case
+            - name: CONFIG_PR_PATCHED
+              value: "true"
             - name: APP_VERSION
               valueFrom:
                 fieldRef:
@@ -48,8 +52,8 @@ spec:
               port: http
           resources:
             requests:
-              cpu: 20m
+              cpu: 30m
               memory: 64Mi
             limits:
               cpu: 200m
-              memory: 128Mi
+              memory: 160Mi

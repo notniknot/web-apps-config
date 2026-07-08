@@ -14,5 +14,5 @@ spec:
     - test-case.playground.sonia-certs.uk
   rules:
     - backendRefs:
-        - name: test-case
+        - name: test-case-pr-renamed
           port: 80

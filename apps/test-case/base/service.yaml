@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: test-case
+  name: test-case-pr-renamed
   labels:
     app.kubernetes.io/name: test-case
 spec:

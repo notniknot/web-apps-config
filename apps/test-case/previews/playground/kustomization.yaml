@@ -49,26 +49,3 @@ replacements:
           name: test-case
         fieldPaths:
           - spec.template.spec.containers.[name=web].env.[name=GENERATED_SECRET_MESSAGE].value
-  - source:
-      kind: ConfigMap
-      name: preview-params
-      fieldPath: data.applicationName
-    targets:
-      - select:
-          group: argocd-image-updater.argoproj.io
-          kind: ImageUpdater
-          name: test-case
-        fieldPaths:
-          - metadata.name
-          - spec.applicationRefs.0.namePattern
-  - source:
-      kind: ConfigMap
-      name: preview-params
-      fieldPath: data.imageAllowTags
-    targets:
-      - select:
-          group: argocd-image-updater.argoproj.io
-          kind: ImageUpdater
-          name: test-case
-        fieldPaths:
-          - spec.applicationRefs.0.images.0.commonUpdateSettings.allowTags
