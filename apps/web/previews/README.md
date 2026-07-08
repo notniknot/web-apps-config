@@ -89,7 +89,9 @@ kinds. The `preview-params.data` content is not controller-hardcoded: the
 template's `preview.params` mapping declares which keys exist and how they
 derive from `values` (e.g. `imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"`),
 on top of the context params the controller always provides (`previewID`,
-`configPR`, `hostNamespace`, `applicationName`, `persistentVolumeName`).
+`configPR`, `hostNamespace`, `applicationName`). WEB-specific structure such
+as the per-preview S3 `persistentVolumeName` is declared in this app's
+`preview.params`, not by the controller.
 `hostname` is additionally a well-known key: the controller mirrors it into
 the PreviewEnvironment status as the UI's preview URL. The replacements
 (owned here, versioned with the branch) fan the params out to the app's
@@ -119,7 +121,8 @@ spec:
                 path: /data
                 value: {previewID: pr42, configPR: "17",
                         hostname: web-pr42.sonia-certs.uk,
-                        imageAllowTags: "regexp:^pr42-.*", ...}
+                        imageAllowTags: "regexp:^pr42-.*",
+                        persistentVolumeName: web-pr42-s3-public, ...}
           - target: {group: preview.sonia.so, kind: PreviewTemplate, name: web}
             patch: |-
               $patch: delete

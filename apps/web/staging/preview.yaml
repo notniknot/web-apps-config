@@ -31,6 +31,7 @@ spec:
     params:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+      persistentVolumeName: "{{.App}}-{{.PreviewID}}-s3-public"
     sourceOverrides:
       - match:
           path: helm/addon

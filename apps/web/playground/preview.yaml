@@ -60,11 +60,13 @@ spec:
     overlayPath: previews/playground
     # What the controller writes into preview-params.data. Keys are chosen
     # here; the replacements in the preview overlay fan them out. Context
-    # params (previewID, configPR, hostNamespace, applicationName,
-    # persistentVolumeName) are provided by the controller automatically.
+    # params (previewID, configPR, hostNamespace, applicationName) are provided
+    # by the controller automatically. App-specific params such as WEB's
+    # persistentVolumeName are declared here.
     params:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+      persistentVolumeName: "{{.App}}-{{.PreviewID}}-s3-public"
     # Per-source adjustments to inherited sources, matched by stable selectors
     # (path/chart/repoURL/ref/releaseName), never by position; an override
     # applies to every matching source, empty rendered values inherit, and
