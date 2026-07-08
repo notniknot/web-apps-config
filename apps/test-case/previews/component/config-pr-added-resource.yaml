@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-pr-added-resource
+data:
+  scenario: add-resource
+  expected: present-only-for-config-pr-preview

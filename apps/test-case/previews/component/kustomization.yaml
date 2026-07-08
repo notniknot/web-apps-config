@@ -3,3 +3,4 @@ kind: Component
 
 resources:
   - preview-params.yaml
+  - config-pr-added-resource.yaml
