@@ -22,7 +22,7 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
-      fieldPath: data.configPR
+      fieldPath: data.previewID
     targets:
       - select:
           kind: Deployment

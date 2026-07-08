@@ -6,7 +6,6 @@ metadata:
     preview.sonia.so/contract: params
 data:
   previewID: local
-  configPR: "0"
   hostname: test-case-local.sonia-certs.uk
   applicationName: test-case-apps-preview-local
   imageAllowTags: regexp:^preview-local-.*

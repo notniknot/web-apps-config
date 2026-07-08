@@ -15,7 +15,6 @@ data:
   # platform's injection. Key names follow the controller's template
   # vocabulary (PreviewID, ConfigPR, HostNamespace, ...).
   previewID: local
-  configPR: "0"
   hostname: web-local.sonia-certs.uk
   hostNamespace: web-preview-local
   applicationName: web-apps-preview-local
