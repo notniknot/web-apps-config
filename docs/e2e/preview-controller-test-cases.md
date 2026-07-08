@@ -48,3 +48,14 @@ Dedicated app: `apps/test-case`
 - Result: UI showed `Deleting`; `PreviewEnvironmentRequest` had a deletion timestamp and status `Deleting` with message `waiting for Argo CD to prune application test-case-apps-preview-tc-slow-clean-0708`; generated Application was `OutOfSync` / `Progressing`; blocker ConfigMap had a deletion timestamp but retained the test finalizer.
 - Finding: the controller did not orphan resources or prematurely remove the request while Argo CD prune was blocked; it kept the request in `Deleting` until the blocking finalizer was cleared.
 - Cleanup: manually removed the test finalizer from `slow-cleanup-blocker`; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`.
+
+## Test 4 - Config repository PR adds a preview resource
+
+- Started: 2026-07-08 05:20 UTC
+- Config PR: `notniknot/web-apps-config#8`, commit `e7231a8`, branch `codex/e2e-config-pr-add-resource`.
+- Setup: PR added preview-only ConfigMap `config-pr-added-resource` under `apps/test-case/previews/component`.
+- Action: enabled `Preview a config repository PR` in the public UI, entered config PR `8`, and created `tc-config-pr-add-0708` with overrides `appName=config-pr-add-app`, `imageTagPrefix=preview-config-pr-add-`, `message=config-pr-add-message`, `ttl=1h`.
+- Result: UI showed chip `config PR #8`, transitioned to `Synced` / `Healthy`, and exposed `Open` and `Argo CD`; `PreviewEnvironment.spec.resolvedSources.config` recorded PR `8` and SHA `e7231a84dbd719d081dd37e6f936f9f9feed9f31`.
+- Verified: generated namespace contained `ConfigMap/config-pr-added-resource` with `scenario=add-resource`; Deployment rendered `PREVIEW_PR=8`; ImageUpdater rendered `allowTags=regexp:^preview-config-pr-add-.*`; public URL returned HTTP `200` and rendered `config-pr-add-app`, PR `8`, and `config-pr-add-message`.
+- Finding: config PR source override works for an added resource and for exposed values/params.
+- Cleanup: deleted preview from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`; closed PR `#8` and deleted its branch.
