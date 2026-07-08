@@ -120,3 +120,12 @@ Dedicated app: `apps/test-case`
 - Verified: both Deployments remained on `ghcr.io/notniknot/web-apps:main`; no ImageUpdater error condition was raised for the no-match prefix.
 - Finding: negative no-match behavior is stable and non-erroring; positive image-loop did not update even though a matching tag existed, so the current ImageUpdater fixture/config does not prove the image override loop.
 - Cleanup: deleted both preview requests; generated Applications, ImageUpdaters, and namespaces were pruned.
+
+## Test 11 - Public UI edit flow
+
+- Started: 2026-07-08 08:31 UTC
+- Action: created `tc-edit-0708` from the public UI with `appName=edit-before`, `imageTagPrefix=preview-edit-before-`, `message=edit-before-message`, then used the UI `Edit` action to change TTL to `2h`, `appName=edit-after`, `imageTagPrefix=preview-edit-after-`, and `message=edit-after-message`.
+- Result: edit form prefilled the existing values and disabled the preview name; after `Update preview`, the UI card showed updated chips without creating a second environment.
+- Verified: `PreviewEnvironmentRequest.spec` updated in place; Deployment env rendered `APP_NAME=edit-after` and `GENERATED_SECRET_MESSAGE=edit-after-message`; ImageUpdater rendered `allowTags=regexp:^preview-edit-after-.*`; public URL returned HTTP `200` and rendered `edit-after` and `edit-after-message`.
+- Finding: public UI edit flow updates the existing request and generated resources in place.
+- Cleanup: deleted the edited request; generated Application and namespace were pruned.
