@@ -79,3 +79,12 @@ Dedicated app: `apps/test-case`
 - Verified: closed and missing PR cases did not create preview namespaces; missing-PR request was manually deleted after status capture.
 - Finding: invalid PR handling is split by failure type: missing PR is a retained Error status, closed PR is treated as a delete signal and removes the request, and non-numeric input is schema-invalid.
 - Cleanup: deleted the retained missing-PR request; no `tc-invalid-*` preview namespaces remained.
+
+## Test 7 - PreviewTemplate values and params matrix
+
+- Started: 2026-07-08 08:15 UTC
+- Action: first tried creating `tc-values-params-0708` from the public UI with spaces and `&` in exposed values; then retried with allowed special characters `values/params:0708.alpha_ok-1`, `preview-values-0708-`, and `msg/with:allowed.value_ok-1`; separately created API request `tc-hidden-override-0708` attempting to override hidden value `hostname`.
+- Result: public UI create returned HTTP `400` for unsupported characters with message `override appName contains unsupported characters (allowed: letters, digits, . _ : / -)`; the allowed-character preview became `Synced` / `Healthy`; hidden `hostname` override was rejected with `phase=Error`, reason `InvalidRequest`, and message `value "hostname" is not overridable for this application`.
+- Verified: `preview-params` included controller-owned params `previewID`, `configPR`, `hostNamespace`, `applicationName` plus exposed value fan-out; Deployment env rendered `APP_NAME`, `PREVIEW_PR=0`, and `GENERATED_SECRET_MESSAGE`; HTTPRoute hostname rendered `test-case-tc-values-params-0708.sonia-certs.uk`; ImageUpdater rendered `allowTags=regexp:^preview-values-0708-.*`; public URL returned HTTP `200` and rendered the allowed values.
+- Finding: exposed values are shape-validated consistently, hidden values cannot be overridden, and params fan out correctly into ConfigMap, Deployment, HTTPRoute, ImageUpdater, and the public app.
+- Cleanup: deleted both requests; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespaces all returned `NotFound`.
