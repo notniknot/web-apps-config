@@ -28,7 +28,7 @@ spec:
     path: web-playground.argocd.yaml
 
   # ── Values ─────────────────────────────────────────────────────────────────
-  # Named inputs to the params mapping below. `expose: true` makes a value
+  # Named inputs to the params mapping below. `editable: true` makes a value
   # user-overridable from the preview UI (overrides are charset-guarded and
   # never re-templated); everything else is fixed by this template.
   values:
@@ -36,13 +36,18 @@ spec:
       # Surfaced on the preview tile. Not exposed: uniqueness comes from
       # PreviewID.
       default: web-{{.PreviewID}}.sonia-certs.uk
-      displayInTile: true
+      visible: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
-      expose: true
+      editable: true
       description: >-
         Tag prefix the preview's Image Updater follows (newest matching build
         wins). Point it at your CI's tag scheme, e.g. pr42-.
+    mix-of-fields:
+      default: "{{.PreviewID}}, {{.PreviewKind}}, {{.App}}, {{.Tenant}}, {{.HostNamespace}}, {{.ConfigRef}} {{.ConfigBranch}}"
+      visible: true
+      editable: true
+
 
   # ── Preview definition ─────────────────────────────────────────────────────
   # The preview Application inherits spec.sources from application.path above,

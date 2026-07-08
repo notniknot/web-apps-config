@@ -19,10 +19,10 @@ spec:
   values:
     hostname:
       default: web-{{.PreviewID}}.staging.sonia-certs.uk
-      displayInTile: true
+      visible: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
-      expose: true
+      editable: true
       description: >-
         Tag prefix the preview's Image Updater follows (newest matching build
         wins). Point it at your CI's tag scheme, e.g. pr42-.

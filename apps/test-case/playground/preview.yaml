@@ -13,18 +13,18 @@ spec:
   values:
     hostname:
       default: test-case-{{.PreviewID}}.sonia-certs.uk
-      displayInTile: true
+      visible: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
-      expose: true
+      editable: true
       description: Image tag prefix that Image Updater follows.
     appName:
       default: test-case {{.PreviewID}}
-      expose: true
+      editable: true
       description: Value rendered into APP_NAME.
     message:
       default: message-{{.PreviewID}}
-      expose: true
+      editable: true
       description: Value rendered into GENERATED_SECRET_MESSAGE.
 
   preview:

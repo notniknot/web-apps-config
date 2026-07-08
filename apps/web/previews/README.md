@@ -84,6 +84,26 @@ sources it declares pass through (bounded by the AppProject source allowlist).
   sources that must not run twice or cannot be namespace-confined (e.g. a
   log-shipper DaemonSet release). A drop override carries no other fields.
 
+### Source ordering: keep Kustomize before Helm (Image Updater)
+
+Previews inherit `spec.sources` **in the order the env Application manifest
+declares them** — and that order is load-bearing for the image loop. Until
+[argocd-image-updater#1725](https://github.com/argoproj-labs/argocd-image-updater/issues/1725)
+is fixed, `method: argocd` write-back picks its target source by *type* in
+`status.sourceTypes` list order, checking Helm before Kustomize. Rules for the
+env Application manifest (e.g. `web-playground.argocd.yaml`):
+
+- The env overlay (kustomize) source comes **first** in `spec.sources`, before
+  any helm source, and is marked explicit with `kustomize: {}`.
+- This holds **per branch**: a config PR that reorders sources (or a preview
+  of an old branch predating this rule) silently breaks that preview's image
+  updates — the updater writes junk `helm.parameters` onto the chart source,
+  never `kustomize.images`, and logs success anyway.
+
+This is deliberately a config-repo convention, not a controller rewrite: the
+controller preserves inherited order faithfully, and the constraint disappears
+once the upstream bug is fixed.
+
 Everything the platform touches is value-shaped or targets platform-owned
 kinds. The `preview-params.data` content is not controller-hardcoded: the
 template's `preview.params` mapping declares which keys exist and how they
@@ -92,7 +112,7 @@ on top of the context params the controller always provides (`previewID`,
 `configPR`, `hostNamespace`, `applicationName`). WEB-specific structure such
 as the per-preview S3 `persistentVolumeName` is declared in this app's
 `preview.params`, not by the controller.
-`displayInTile: true` on WEB's hostname value asks the controller to copy the
+`visible: true` on WEB's hostname value asks the controller to copy the
 rendered hostname into PreviewEnvironment status for plain-text tile display. The replacements
 (owned here, versioned with the branch) fan the params out to the app's
 actual resources. If a feature branch renames or restructures
