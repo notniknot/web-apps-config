@@ -147,3 +147,12 @@ Dedicated app: `apps/test-case`
 - Verified: generated Application and namespace returned `NotFound` after TTL-triggered cleanup completed.
 - Finding: TTL garbage collection is active and cleans up the request, generated Application, and namespace.
 - Cleanup: no manual preview deletion was needed; only post-GC verification was performed.
+
+## Test 14 - RBAC, app visibility, and error UI
+
+- Started: 2026-07-08 08:42 UTC
+- Action: inspected the public UI app selector, triggered a backend validation error from the UI with unsupported value characters, and created API request `tc-unauthorized-app-0708` for nonexistent app/path `apps/no-such-app`.
+- Result: public UI selector listed only `test-case` and `web`; UI displayed inline `HTTP 400: override appName contains unsupported characters (allowed: letters, digits, . _ : / -)` and created no environment; nonexistent app request stayed in `phase=Error` with reason `TemplateNotFound`.
+- Verified: nonexistent app request created no preview namespace; UI environment list stayed empty for the failed create path.
+- Finding: app visibility is limited to preview-capable apps currently visible to the extension, backend validation errors surface inline in the UI, and nonexistent app/path requests are denied before generated resources are created.
+- Cleanup: deleted the retained `TemplateNotFound` request; no preview requests or namespaces remained.
