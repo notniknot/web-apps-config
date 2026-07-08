@@ -70,3 +70,12 @@ Dedicated app: `apps/test-case`
 - Verified: generated namespace contained Service `test-case-pr-renamed`; HTTPRoute backendRef pointed to `test-case-pr-renamed` with `Accepted=True` and `ResolvedRefs=True`; Deployment had annotation `e2e.preview.sonia.so/config-pr-patched=true`, env `CONFIG_PR_PATCHED=true`, `PREVIEW_PR=9`, request CPU `30m`, and limit memory `160Mi`; ImageUpdater `argocd/test-case-apps-preview-tc-pr9-patch-0708` was absent; public URL returned HTTP `200` and rendered `pr9-patched-app` and `pr9-message`.
 - Finding: config PR source override works for patched fields, removed resources/replacements, and resource rename/restructure when the PR keeps the app internally consistent.
 - Cleanup: deleted preview from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`; closed PR `#9` and deleted its branch.
+
+## Test 6 - Invalid config repository PR inputs
+
+- Started: 2026-07-08 08:12 UTC
+- Action: created invalid requests for closed config PR `#9`, missing config PR `#99999`, and non-numeric config PR value `nope`.
+- Result: closed PR `#9` caused events `PreviewPullRequestClosed` and `PreviewDeleted`; the controller deleted `PreviewEnvironmentRequest/tc-invalid-closed-pr-0708` instead of leaving an Error CR. Missing PR `#99999` left `PreviewEnvironmentRequest/tc-invalid-missing-pr-0708` in `phase=Error` with reason `PullRequestNotFound` and message `config PR #99999 not found in notniknot/web-apps-config`. Non-numeric `configPullRequest: nope` was rejected by the API server because the field must be an integer.
+- Verified: closed and missing PR cases did not create preview namespaces; missing-PR request was manually deleted after status capture.
+- Finding: invalid PR handling is split by failure type: missing PR is a retained Error status, closed PR is treated as a delete signal and removes the request, and non-numeric input is schema-invalid.
+- Cleanup: deleted the retained missing-PR request; no `tc-invalid-*` preview namespaces remained.
