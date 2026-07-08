@@ -59,3 +59,14 @@ Dedicated app: `apps/test-case`
 - Verified: generated namespace contained `ConfigMap/config-pr-added-resource` with `scenario=add-resource`; Deployment rendered `PREVIEW_PR=8`; ImageUpdater rendered `allowTags=regexp:^preview-config-pr-add-.*`; public URL returned HTTP `200` and rendered `config-pr-add-app`, PR `8`, and `config-pr-add-message`.
 - Finding: config PR source override works for an added resource and for exposed values/params.
 - Cleanup: deleted preview from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`; closed PR `#8` and deleted its branch.
+
+## Test 5 - Config repository PR patches, removes, and renames resources
+
+- Started: 2026-07-08 08:08 UTC
+- Config PR: `notniknot/web-apps-config#9`, commit `09f8bfc`, branch `codex/e2e-config-pr-patch-remove-rename`.
+- Setup: PR patched Deployment annotation/env/resources, renamed Service `test-case` to `test-case-pr-renamed`, updated HTTPRoute backendRef to the renamed Service, and removed ImageUpdater plus its preview replacements.
+- Action: enabled `Preview a config repository PR` in the public UI, entered config PR `9`, and created `tc-pr9-patch-0708` with overrides `appName=pr9-patched-app`, `imageTagPrefix=preview-pr9-`, `message=pr9-message`, `ttl=1h`.
+- Result: UI showed chip `config PR #9`, transitioned to `Synced` / `Healthy`, and exposed `Open` and `Argo CD`; `PreviewEnvironment.spec.resolvedSources.config` recorded PR `9` and SHA `09f8bfc57673f378fa4af1d928653710f007ca99`.
+- Verified: generated namespace contained Service `test-case-pr-renamed`; HTTPRoute backendRef pointed to `test-case-pr-renamed` with `Accepted=True` and `ResolvedRefs=True`; Deployment had annotation `e2e.preview.sonia.so/config-pr-patched=true`, env `CONFIG_PR_PATCHED=true`, `PREVIEW_PR=9`, request CPU `30m`, and limit memory `160Mi`; ImageUpdater `argocd/test-case-apps-preview-tc-pr9-patch-0708` was absent; public URL returned HTTP `200` and rendered `pr9-patched-app` and `pr9-message`.
+- Finding: config PR source override works for patched fields, removed resources/replacements, and resource rename/restructure when the PR keeps the app internally consistent.
+- Cleanup: deleted preview from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`; closed PR `#9` and deleted its branch.
