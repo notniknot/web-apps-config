@@ -110,3 +110,13 @@ Dedicated app: `apps/test-case`
 - Verified: no preview namespace was created.
 - Finding: sourceOverrides no-match denial is enforced for effectful overrides and surfaces a clear `InvalidTemplate` status.
 - Cleanup: deleted the error request; closed PR `#11` and deleted its branch.
+
+## Test 10 - ImageUpdater positive and negative tag prefixes
+
+- Started: 2026-07-08 08:27 UTC
+- Setup: GHCR package `ghcr.io/notniknot/web-apps` had existing tag `preview-pr-4-06d4099`; no tag matched `preview-no-such-tag-0708-*`.
+- Action: created `tc-image-positive-0708` with `imageTagPrefix=preview-pr-4-` and `tc-image-negative-0708` with `imageTagPrefix=preview-no-such-tag-0708-`.
+- Result: both previews became `Synced` / `Healthy`; both ImageUpdater CRs rendered expected `allowTags` values, matched one generated Application, managed one image, and reported `Ready=True` with `Reconciled 1 applications, 0 images updated`.
+- Verified: both Deployments remained on `ghcr.io/notniknot/web-apps:main`; no ImageUpdater error condition was raised for the no-match prefix.
+- Finding: negative no-match behavior is stable and non-erroring; positive image-loop did not update even though a matching tag existed, so the current ImageUpdater fixture/config does not prove the image override loop.
+- Cleanup: deleted both preview requests; generated Applications, ImageUpdaters, and namespaces were pruned.
