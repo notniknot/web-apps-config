@@ -13,6 +13,7 @@ spec:
   values:
     hostname:
       default: test-case-{{.PreviewID}}.sonia-certs.uk
+      displayInTile: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
       expose: true

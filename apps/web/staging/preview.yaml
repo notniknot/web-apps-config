@@ -19,6 +19,7 @@ spec:
   values:
     hostname:
       default: web-{{.PreviewID}}.staging.sonia-certs.uk
+      displayInTile: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
       expose: true

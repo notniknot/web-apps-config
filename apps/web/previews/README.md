@@ -92,8 +92,8 @@ on top of the context params the controller always provides (`previewID`,
 `configPR`, `hostNamespace`, `applicationName`). WEB-specific structure such
 as the per-preview S3 `persistentVolumeName` is declared in this app's
 `preview.params`, not by the controller.
-`hostname` is additionally a well-known key: the controller mirrors it into
-the PreviewEnvironment status as the UI's preview URL. The replacements
+`displayInTile: true` on WEB's hostname value asks the controller to copy the
+rendered hostname into PreviewEnvironment status for plain-text tile display. The replacements
 (owned here, versioned with the branch) fan the params out to the app's
 actual resources. If a feature branch renames or restructures
 resources, it updates base/env overlays and these replacements **in the same

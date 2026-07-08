@@ -33,9 +33,10 @@ spec:
   # never re-templated); everything else is fixed by this template.
   values:
     hostname:
-      # Also surfaced by the controller as the preview URL in the UI
-      # (well-known key). Not exposed: uniqueness comes from PreviewID.
+      # Surfaced on the preview tile. Not exposed: uniqueness comes from
+      # PreviewID.
       default: web-{{.PreviewID}}.sonia-certs.uk
+      displayInTile: true
     imageTagPrefix:
       default: preview-{{.PreviewID}}-
       expose: true
