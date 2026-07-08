@@ -11,6 +11,17 @@ replacements:
   - source:
       kind: ConfigMap
       name: preview-params
+      fieldPath: data.hostname
+    targets:
+      - select:
+          group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: test-case
+        fieldPaths:
+          - spec.hostnames.0
+  - source:
+      kind: ConfigMap
+      name: preview-params
       fieldPath: data.configPR
     targets:
       - select:

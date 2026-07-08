@@ -26,3 +26,15 @@ Dedicated app: `apps/test-case`
 - URL check: `https://test-case-tc-baseline-0708b.sonia-certs.uk` returned HTTP `200` and rendered `custom-test-case`, `preview-tc-baseline-0708b`, `baseline-shared`, and `hello-e2e`.
 - Finding: baseline public UI create/open/read/delete flow works after the scaffold route fix.
 - Cleanup: deleted from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`.
+
+## Test 2 - Preview without rendered HTTPRoute
+
+- Started: 2026-07-08 05:12 UTC
+- Config commit: `a9868fa`
+- Setup: temporarily removed `httproute.yaml` and the hostname replacement from the dedicated `test-case` app; verified the live base app no longer had `HTTPRoute/test-case`.
+- Action: created `tc-no-route-0708` from the public Argo CD Previews UI with overrides `appName=no-route-app`, `imageTagPrefix=preview-no-route-`, `message=no-route-message`, `ttl=1h`.
+- Result: generated preview became `Synced` / `Healthy` with Deployment `1/1` Ready and no rendered HTTPRoute in namespace `web-preview-tc-no-route-0708`.
+- UI finding: while Pending, `Open` rendered as a disabled button; after Healthy, `Open` became an enabled link because `PreviewEnvironment.status.urls` still contained `https://test-case-tc-no-route-0708.sonia-certs.uk`.
+- URL check: the enabled `Open` target returned Envoy HTTP `404`, because no HTTPRoute served the hostname.
+- Finding: the controller/UI currently treat a hostname-derived URL as openable even when the rendered preview has no route; the Open button can lead to a dead URL for route-less apps.
+- Cleanup: deleted from public UI; verified `PreviewEnvironmentRequest`, `PreviewEnvironment`, generated Application, and namespace all returned `NotFound`.
