@@ -1,3 +1,5 @@
+# PreviewTemplate for the playground test-case app.
+# Located by controller config preview.templateFile; not a spec field.
 apiVersion: preview.sonia.so/v1alpha1
 kind: PreviewTemplate
 metadata:
@@ -28,7 +30,10 @@ spec:
       description: Value rendered into GENERATED_SECRET_MESSAGE.
 
   preview:
-    overlayPath: previews/playground
+    source:
+      # Swap the playground source to this preview overlay.
+      overlayPath: previews/playground
+    # Values written into preview-params.data.
     params:
       hostname: "{{.Values.hostname}}"
       imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"

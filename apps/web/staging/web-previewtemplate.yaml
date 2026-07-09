@@ -1,0 +1,43 @@
+# PreviewTemplate for the staging env.
+# Located by controller config preview.templateFile; not a spec field.
+apiVersion: preview.sonia.so/v1alpha1
+kind: PreviewTemplate
+metadata:
+  name: web
+spec:
+  enabled: true
+  configRepository: notniknot/web-apps-config
+  path: apps/web
+  application:
+    name: web
+    path: web-staging.argocd.yaml
+
+  values:
+    hostname:
+      default: web-{{.PreviewID}}.staging.sonia-certs.uk
+      visible: true
+    imageTagPrefix:
+      default: preview-{{.PreviewID}}-
+      editable: true
+      description: >-
+        Tag prefix the preview's Image Updater follows (newest matching build
+        wins). Point it at your CI's tag scheme, e.g. pr42-.
+
+  preview:
+    source:
+      # Swap the staging source to this preview overlay.
+      overlayPath: previews/staging
+    # Values written into preview-params.data.
+    params:
+      hostname: "{{.Values.hostname}}"
+      imageAllowTags: "regexp:^{{.Values.imageTagPrefix}}.*"
+      persistentVolumeName: "{{.App}}-{{.PreviewID}}-s3-public"
+    sourceOverrides:
+      - match:
+          path: helm/addon
+        helm:
+          valueFiles:
+            - $values/apps/web/base/addon-values.yaml
+            - $values/apps/web/previews/staging/addon-values.yaml
+          valuesObject:
+            message: preview-{{.PreviewID}}

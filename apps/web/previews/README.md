@@ -6,9 +6,9 @@ times by the preview controller.
 
 ```
 base/                     shared across all clusters (incl. image-updater.yaml)
-  └─ playground/          env overlay: make-it-work patches + preview.yaml
+  └─ playground/          env overlay + web-previewtemplate.yaml
        └─ previews/playground/   = ../../playground + previews/component
-  └─ staging/             (illustrative) env overlay + preview.yaml
+  └─ staging/             (illustrative) env overlay + web-previewtemplate.yaml
        └─ previews/staging/      = ../../staging   + previews/component
 previews/component/       minimal shared preview deltas:
                             kustomization.yaml  (static patches, replicas)
@@ -27,7 +27,7 @@ env-specific fix (reduced compute, hostnames, tracked tags, …) instead of
 re-inventing them.
 
 **Templates travel with their env**: each env overlay carries its own
-`preview.yaml` (`PreviewTemplate`, named `web` like the app), so every cluster
+`<app>-previewtemplate.yaml` (`PreviewTemplate`, named like the app), so every cluster
 receives exactly its env's template through plain GitOps. Since previews wrap
 the env overlay, the template would render into the preview too — the
 **controller strips it** by appending a `$patch: delete` for it (it knows the
@@ -186,7 +186,7 @@ This layout can be reached in two phases (idea credit: the alternative
 2. **Built-in contract with source inheritance** — the controller owns the
    params patch, the template delete, and the Application envelope; sources
    are inherited from the env's Application manifest with the overlay source
-   swapped by **path match** (`preview.overlayPath`) and per-source tweaks
+   swapped by **path match** (`preview.source.overlayPath`) and per-source tweaks
    via selector-matched `preview.sourceOverrides`. Index-based source rules
    and per-app `patchTemplate` boilerplate are deleted (kept only as a
    documented escape hatch). Phase 2 must be scheduled explicitly — the two

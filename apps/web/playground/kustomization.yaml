@@ -3,10 +3,8 @@ kind: Kustomization
 
 resources:
   - ../base
-  # This env's PreviewTemplate: applied to the cluster with the app so the
-  # preview UI can read it. The preview controller strips it from preview
-  # renders (see preview.yaml header).
-  - preview.yaml
+  # PreviewTemplate for UI discovery.
+  - web-previewtemplate.yaml
 
 images:
   - name: ghcr.io/notniknot/web-apps

@@ -43,7 +43,7 @@ Argo CD UI extension
 - Tenant config repository: `notniknot/web-apps-config`.
 - Root/Argo CD config repository: `notniknot/argocd`.
 - Controller repository: `notniknot/preview-controller`.
-- App-local preview template: `apps/web/preview.yaml` (`kind: PreviewTemplate`).
+- App-local preview template: `apps/web/playground/web-previewtemplate.yaml`.
 - App-local preview components: `apps/web/previews/components`.
 - App-local preview patches: `apps/web/previews/patches`.
 - Stable app structure: `apps/<app>/base`, `apps/<app>/<env>`, and
@@ -64,7 +64,7 @@ Three kinds, all group `preview.sonia.so/v1alpha1`.
 
 ### PreviewTemplate (tenant-owned, Git document)
 
-`apps/web/preview.yaml` is the app-local template. It is read from the config
+`apps/web/playground/web-previewtemplate.yaml` is the app-local template. It is read from the config
 repository by the controller; it is not created in the cluster during normal
 workflows.
 
